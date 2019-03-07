@@ -82,7 +82,7 @@ namespace MonoTests.System.Configuration
             TimeSpanSecondsOrInfiniteConverter cv = new TimeSpanSecondsOrInfiniteConverter();
             object o = null;
 
-            Assert.Throws<ArgumentException>(() => o = cv.ConvertFrom(null, null, "100.5"));
+            AssertExtensions.Throws<ArgumentException>(null, () => o = cv.ConvertFrom(null, null, "100.5"));
             Assert.Null(o);
         }
 
@@ -110,8 +110,8 @@ namespace MonoTests.System.Configuration
 
             /* infinity tests */
             Assert.Equal("Infinite", cv.ConvertTo(null, null, TimeSpan.MaxValue, typeof(string)));
-            Assert.Equal("Infinite", cv.ConvertTo(null, null, new TimeSpan(Int64.MaxValue), typeof(string)));
-            Assert.Equal("922337203685", cv.ConvertTo(null, null, new TimeSpan(Int64.MaxValue - 1), typeof(string)));
+            Assert.Equal("Infinite", cv.ConvertTo(null, null, new TimeSpan(long.MaxValue), typeof(string)));
+            Assert.Equal("922337203685", cv.ConvertTo(null, null, new TimeSpan(long.MaxValue - 1), typeof(string)));
         }
 
         [Fact]
@@ -127,7 +127,7 @@ namespace MonoTests.System.Configuration
         {
             TimeSpanSecondsOrInfiniteConverter cv = new TimeSpanSecondsOrInfiniteConverter();
 
-            Assert.Throws<ArgumentException>(() => cv.ConvertTo(null, null, 59, typeof(string)));
+            AssertExtensions.Throws<ArgumentException>(null, () => cv.ConvertTo(null, null, 59, typeof(string)));
         }
 
         [Fact]

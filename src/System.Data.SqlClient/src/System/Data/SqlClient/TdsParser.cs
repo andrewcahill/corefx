@@ -3,7 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Buffers;
 using System.Data.Common;
+using System.Data.Sql;
 using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Globalization;
@@ -12,8 +14,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-
-
+using Microsoft.SqlServer.Server;
 using MSS = Microsoft.SqlServer.Server;
 
 namespace System.Data.SqlClient
@@ -34,15 +35,6 @@ namespace System.Data.SqlClient
     // and surfacing objects to the user.
     internal sealed partial class TdsParser
     {
-        static TdsParser()
-        {
-            // For CoreCLR, we need to register the ANSI Code Page encoding provider before attempting to get an Encoding from a CodePage
-            // For a default installation of SqlServer the encoding exchanged during Login is 1252. This encoding is not loaded by default
-            // See Remarks at https://msdn.microsoft.com/en-us/library/system.text.encodingprovider(v=vs.110).aspx 
-            // SqlClient needs to register the encoding providers to make sure that even basic scenarios work with Sql Server.
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        }
-
         // Default state object for parser
         internal TdsParserStateObject _physicalStateObj = null; // Default stateObj and connection for Dbnetlib and non-MARS SNI.
 
@@ -65,6 +57,7 @@ namespace System.Data.SqlClient
         private string _server = "";                            // name of server that the parser connects to
 
         internal volatile bool _fResetConnection = false;                 // flag to denote whether we are needing to call sp_reset
+        internal volatile bool _fPreserveTransaction = false;             // flag to denote whether we need to preserve the transaction when reseting
 
         private SqlCollation _defaultCollation;                         // default collation from the server
 
@@ -80,6 +73,9 @@ namespace System.Data.SqlClient
 
         private SqlInternalTransaction _currentTransaction;
         private SqlInternalTransaction _pendingTransaction;    // pending transaction for Yukon and beyond.
+
+        //  need to hold on to the transaction id if distributed transaction merely rolls back without defecting.
+        private long _retainedTransactionId = SqlInternalTransaction.NullTransactionId;
 
         // This counter is used for the entire connection to track the open result count for all
         // operations not under a transaction.
@@ -121,7 +117,7 @@ namespace System.Data.SqlClient
 
         // SSPI variables
 
-        private volatile static UInt32 s_maxSSPILength = 0;     // variable to hold max SSPI data size, keep for token from server
+        private volatile static uint s_maxSSPILength = 0;     // variable to hold max SSPI data size, keep for token from server
 
         // textptr sequence
         private static readonly byte[] s_longDataHeader = { 0x10, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
@@ -141,7 +137,7 @@ namespace System.Data.SqlClient
         internal TdsParser(bool MARS, bool fAsynchronous)
         {
             _fMARS = MARS; // may change during Connect to pre Yukon servers
-            
+
             _physicalStateObj = TdsParserStateObjectFactory.Singleton.CreateTdsParserStateObject(this);
         }
 
@@ -197,7 +193,6 @@ namespace System.Data.SqlClient
                 _encryptionOption = value;
             }
         }
-
 
         internal bool IsKatmaiOrNewer
         {
@@ -293,7 +288,7 @@ namespace System.Data.SqlClient
         {
             if (_state != TdsParserState.Closed)
             {
-                Debug.Assert(false, "TdsParser.Connect called on non-closed connection!");
+                Debug.Fail("TdsParser.Connect called on non-closed connection!");
                 return;
             }
 
@@ -307,7 +302,7 @@ namespace System.Data.SqlClient
                 _physicalStateObj.AddError(ProcessSNIError(_physicalStateObj));
                 _physicalStateObj.Dispose();
                 ThrowExceptionAndWarning(_physicalStateObj);
-                Debug.Assert(false, "SNI returned status != success, but no error thrown?");
+                Debug.Fail("SNI returned status != success, but no error thrown?");
             }
 
             _sniSpnBuffer = null;
@@ -338,7 +333,7 @@ namespace System.Data.SqlClient
                 // a bad error could be returned (as it was when it was freed to early for me).
                 _physicalStateObj.Dispose();
                 ThrowExceptionAndWarning(_physicalStateObj);
-                Debug.Assert(false, "SNI returned status != success, but no error thrown?");
+                Debug.Fail("SNI returned status != success, but no error thrown?");
             }
 
             _server = serverInfo.ResolvedServerName;
@@ -354,7 +349,7 @@ namespace System.Data.SqlClient
                     serverInfo.ResolvedServerName : serverInfo.PreRoutingServerName);
             }
             _state = TdsParserState.OpenNotLoggedIn;
-            _physicalStateObj.SniContext = SniContext.Snix_PreLoginBeforeSuccessfullWrite;
+            _physicalStateObj.SniContext = SniContext.Snix_PreLoginBeforeSuccessfulWrite;
             _physicalStateObj.TimeoutTime = timerExpire;
 
             bool marsCapable = false;
@@ -362,7 +357,7 @@ namespace System.Data.SqlClient
             _connHandler.TimeoutErrorInternal.EndPhase(SqlConnectionTimeoutErrorPhase.InitializeConnection);
             _connHandler.TimeoutErrorInternal.SetAndBeginPhase(SqlConnectionTimeoutErrorPhase.SendPreLoginHandshake);
 
-            UInt32 result = _physicalStateObj.SniGetConnectionId(ref _connHandler._clientConnectionId);
+            uint result = _physicalStateObj.SniGetConnectionId(ref _connHandler._clientConnectionId);
             Debug.Assert(result == TdsEnums.SNI_SUCCESS, "Unexpected failure state upon calling SniGetConnectionId");
 
             SendPreLoginHandshake(instanceName, encrypt);
@@ -372,7 +367,7 @@ namespace System.Data.SqlClient
 
             _physicalStateObj.SniContext = SniContext.Snix_PreLogin;
 
-            PreLoginHandshakeStatus status = ConsumePreLoginHandshake(encrypt, trustServerCert, integratedSecurity, out marsCapable);
+            PreLoginHandshakeStatus status = ConsumePreLoginHandshake(encrypt, trustServerCert, integratedSecurity, out marsCapable, out _connHandler._fedAuthRequired);
 
             if (status == PreLoginHandshakeStatus.InstanceFailure)
             {
@@ -389,12 +384,12 @@ namespace System.Data.SqlClient
                     ThrowExceptionAndWarning(_physicalStateObj);
                 }
 
-                UInt32 retCode = _physicalStateObj.SniGetConnectionId(ref _connHandler._clientConnectionId);
+                uint retCode = _physicalStateObj.SniGetConnectionId(ref _connHandler._clientConnectionId);
 
                 Debug.Assert(retCode == TdsEnums.SNI_SUCCESS, "Unexpected failure state upon calling SniGetConnectionId");
 
                 SendPreLoginHandshake(instanceName, encrypt);
-                status = ConsumePreLoginHandshake(encrypt, trustServerCert, integratedSecurity, out marsCapable);
+                status = ConsumePreLoginHandshake(encrypt, trustServerCert, integratedSecurity, out marsCapable, out _connHandler._fedAuthRequired);
 
                 // Don't need to check for Sphinx failure, since we've already consumed
                 // one pre-login packet and know we are connecting to Shiloh.
@@ -420,7 +415,7 @@ namespace System.Data.SqlClient
         {
             Debug.Assert(_encryptionOption == EncryptionOptions.LOGIN, "Invalid encryption option state");
 
-            UInt32 error = _physicalStateObj.DisabeSsl();
+            uint error = _physicalStateObj.DisabeSsl();
 
             if (error != TdsEnums.SNI_SUCCESS)
             {
@@ -430,7 +425,7 @@ namespace System.Data.SqlClient
 
             // create a new packet encryption changes the internal packet size
             _physicalStateObj.ClearAllWritePackets();
-            
+
         }
 
         internal void EnableMars()
@@ -440,9 +435,10 @@ namespace System.Data.SqlClient
                 // Cache physical stateObj and connection.
                 _pMarsPhysicalConObj = _physicalStateObj;
 
-                if(TdsParserStateObjectFactory.UseManagedSNI) _pMarsPhysicalConObj.IncrementPendingCallbacks();
+                if (TdsParserStateObjectFactory.UseManagedSNI)
+                    _pMarsPhysicalConObj.IncrementPendingCallbacks();
 
-                UInt32 info = 0;
+                uint info = 0;
                 uint error = _pMarsPhysicalConObj.EnableMars(ref info);
 
                 if (error != TdsEnums.SNI_SUCCESS)
@@ -474,8 +470,6 @@ namespace System.Data.SqlClient
             else
             {
                 session = _physicalStateObj;
-                // But for CoreCLR we are now relying on the owner to ensure that cancellation owner comes from one source
-                session.Owner = owner;
             }
             Debug.Assert(session._outputPacketNumber == 1, "The packet number is expected to be 1");
             return session;
@@ -603,7 +597,7 @@ namespace System.Data.SqlClient
                         break;
 
                     case (int)PreLoginOptions.THREADID:
-                        Int32 threadID = TdsParserStaticMethods.GetCurrentThreadIdForTdsLoginOnly();
+                        int threadID = TdsParserStaticMethods.GetCurrentThreadIdForTdsLoginOnly();
 
                         payload[payloadLength++] = (byte)((0xff000000 & threadID) >> 24);
                         payload[payloadLength++] = (byte)((0x00ff0000 & threadID) >> 16);
@@ -620,28 +614,31 @@ namespace System.Data.SqlClient
                         break;
 
                     case (int)PreLoginOptions.TRACEID:
-                        byte[] connectionIdBytes = _connHandler._clientConnectionId.ToByteArray();
-                        Debug.Assert(GUID_SIZE == connectionIdBytes.Length);
-                        Buffer.BlockCopy(connectionIdBytes, 0, payload, payloadLength, GUID_SIZE);
+                        FillGuidBytes(_connHandler._clientConnectionId, payload.AsSpan(payloadLength, GUID_SIZE));
                         payloadLength += GUID_SIZE;
                         offset += GUID_SIZE;
                         optionDataSize = GUID_SIZE;
 
                         ActivityCorrelator.ActivityId actId = ActivityCorrelator.Next();
-                        connectionIdBytes = actId.Id.ToByteArray();
-                        Buffer.BlockCopy(connectionIdBytes, 0, payload, payloadLength, GUID_SIZE);
+                        FillGuidBytes(actId.Id, payload.AsSpan(payloadLength, GUID_SIZE));
                         payloadLength += GUID_SIZE;
                         payload[payloadLength++] = (byte)(0x000000ff & actId.Sequence);
                         payload[payloadLength++] = (byte)((0x0000ff00 & actId.Sequence) >> 8);
                         payload[payloadLength++] = (byte)((0x00ff0000 & actId.Sequence) >> 16);
                         payload[payloadLength++] = (byte)((0xff000000 & actId.Sequence) >> 24);
-                        int actIdSize = GUID_SIZE + sizeof(UInt32);
+                        int actIdSize = GUID_SIZE + sizeof(uint);
                         offset += actIdSize;
                         optionDataSize += actIdSize;
                         break;
 
+                    case (int)PreLoginOptions.FEDAUTHREQUIRED:
+                        payload[payloadLength++] = 0x01;
+                        offset += 1;
+                        optionDataSize += 1;
+                        break;
+
                     default:
-                        Debug.Assert(false, "UNKNOWN option in SendPreLoginHandshake");
+                        Debug.Fail("UNKNOWN option in SendPreLoginHandshake");
                         break;
                 }
 
@@ -660,13 +657,15 @@ namespace System.Data.SqlClient
             _physicalStateObj.WritePacket(TdsEnums.HARDFLUSH);
         }
 
-        private PreLoginHandshakeStatus ConsumePreLoginHandshake(bool encrypt, bool trustServerCert, bool integratedSecurity, out bool marsCapable)
+        private PreLoginHandshakeStatus ConsumePreLoginHandshake(bool encrypt, bool trustServerCert, bool integratedSecurity, out bool marsCapable, out bool fedAuthRequired)
         {
             marsCapable = _fMARS; // Assign default value
+            fedAuthRequired = false;
             bool isYukonOrLater = false;
             Debug.Assert(_physicalStateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
             bool result = _physicalStateObj.TryReadNetworkPacket();
-            if (!result) { throw SQL.SynchronousCallMayNotPend(); }
+            if (!result)
+            { throw SQL.SynchronousCallMayNotPend(); }
 
             if (_physicalStateObj._inBytesRead == 0)
             {
@@ -676,17 +675,19 @@ namespace System.Data.SqlClient
                 ThrowExceptionAndWarning(_physicalStateObj);
             }
 
-            if (!_physicalStateObj.TryProcessHeader()) { throw SQL.SynchronousCallMayNotPend(); }
+            if (!_physicalStateObj.TryProcessHeader())
+            { throw SQL.SynchronousCallMayNotPend(); }
 
-            if (_physicalStateObj._inBytesPacket > TdsEnums.MAX_PACKET_SIZE || _physicalStateObj._inBytesPacket < 0)
+            if (_physicalStateObj._inBytesPacket > TdsEnums.MAX_PACKET_SIZE || _physicalStateObj._inBytesPacket <= 0)
             {
-                throw SQL.InvalidPacketSize();
+                throw SQL.ParsingError();
             }
             byte[] payload = new byte[_physicalStateObj._inBytesPacket];
 
             Debug.Assert(_physicalStateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
-            result = _physicalStateObj.TryReadByteArray(payload, 0, payload.Length);
-            if (!result) { throw SQL.SynchronousCallMayNotPend(); }
+            result = _physicalStateObj.TryReadByteArray(payload, payload.Length);
+            if (!result)
+            { throw SQL.SynchronousCallMayNotPend(); }
 
             if (payload[0] == 0xaa)
             {
@@ -772,15 +773,18 @@ namespace System.Data.SqlClient
                                 break;
 
                             default:
-                                Debug.Assert(false, "Invalid client encryption option detected");
+                                Debug.Fail("Invalid client encryption option detected");
                                 break;
                         }
 
                         if (_encryptionOption == EncryptionOptions.ON ||
                             _encryptionOption == EncryptionOptions.LOGIN)
                         {
-                            UInt32 error = 0;
-                            UInt32 info = ((encrypt && !trustServerCert) ? TdsEnums.SNI_SSL_VALIDATE_CERTIFICATE : 0)
+                            uint error = 0;
+                            // If we're using legacy server certificate validation behavior (not using access token), then validate if Encrypt=true and Trust Sever Certificate = false.
+                            // If using access token, validate if Trust Server Certificate=false.
+                            bool shouldValidateServerCert = (encrypt && !trustServerCert) || (_connHandler._accessTokenInBytes != null && !trustServerCert);
+                            uint info = (shouldValidateServerCert ? TdsEnums.SNI_SSL_VALIDATE_CERTIFICATE : 0)
                                 | (isYukonOrLater ? TdsEnums.SNI_SSL_USE_SCHANNEL_CACHE : 0);
 
                             if (encrypt && !integratedSecurity)
@@ -800,7 +804,7 @@ namespace System.Data.SqlClient
                             }
 
                             WaitForSSLHandShakeToComplete(ref error);
-                            
+
                             // create a new packet encryption changes the internal packet size
                             _physicalStateObj.ClearAllWritePackets();
                         }
@@ -843,8 +847,25 @@ namespace System.Data.SqlClient
                         offset += 4;
                         break;
 
+                    case (int)PreLoginOptions.FEDAUTHREQUIRED:
+                        payloadOffset = payload[offset++] << 8 | payload[offset++];
+                        payloadLength = payload[offset++] << 8 | payload[offset++];
+
+                        // Only 0x00 and 0x01 are accepted values from the server.
+                        if (payload[payloadOffset] != 0x00 && payload[payloadOffset] != 0x01)
+                        {
+                            throw SQL.ParsingErrorValue(ParsingErrorState.FedAuthRequiredPreLoginResponseInvalidValue, (int)payload[payloadOffset]);
+                        }
+
+                        // We must NOT use the response for the FEDAUTHREQUIRED PreLogin option, if AccessToken is not null, meaning token based authentication is used.
+                        if (_connHandler.ConnectionOptions != null || _connHandler._accessTokenInBytes != null)
+                        {
+                            fedAuthRequired = payload[payloadOffset] == 0x01 ? true : false;
+                        }
+                        break;
+
                     default:
-                        Debug.Assert(false, "UNKNOWN option in ConsumePreLoginHandshake, option:" + option);
+                        Debug.Fail("UNKNOWN option in ConsumePreLoginHandshake, option:" + option);
 
                         // DO NOTHING FOR THESE UNKNOWN OPTIONS
                         offset += 4;
@@ -954,6 +975,12 @@ namespace System.Data.SqlClient
                     _pMarsPhysicalConObj = null;
                 }
             }
+
+            _resetConnectionEvent?.Dispose();
+            _resetConnectionEvent = null;
+
+            _defaultEncoding = null;
+            _defaultCollation = null;
         }
 
         // Fires a single InfoMessageEvent
@@ -1130,7 +1157,7 @@ namespace System.Data.SqlClient
             Debug.Assert(SniContext.Undefined != stateObj.DebugOnlyCopyOfSniContext || ((_fMARS) && ((_state == TdsParserState.Closed) || (_state == TdsParserState.Broken))), "SniContext must not be None");
 #endif
             SNIErrorDetails details = GetSniErrorDetails();
-            
+
             if (details.sniErrorNumber != 0)
             {
                 // handle special SNI error codes that are converted into exception which is not a SqlException.
@@ -1172,10 +1199,12 @@ namespace System.Data.SqlClient
             else
                 Debug.Assert(!string.IsNullOrEmpty(details.errorMessage), "Empty error message received from SNI");
 
-            string sqlContextInfo = SR.GetResourceString(Enum.GetName(typeof(SniContext), stateObj.SniContext), Enum.GetName(typeof(SniContext), stateObj.SniContext));
-            string providerRid = String.Format((IFormatProvider)null, "SNI_PN{0}", details.provider);
+            string sniContextEnumName = TdsEnums.GetSniContextEnumName(stateObj.SniContext);
+
+            string sqlContextInfo = SR.GetResourceString(sniContextEnumName, sniContextEnumName);
+            string providerRid = string.Format("SNI_PN{0}", details.provider);
             string providerName = SR.GetResourceString(providerRid, providerRid);
-            Debug.Assert(!string.IsNullOrEmpty(providerName), String.Format((IFormatProvider)null, "invalid providerResourceId '{0}'", providerRid));
+            Debug.Assert(!string.IsNullOrEmpty(providerName), $"invalid providerResourceId '{providerRid}'");
             uint win32ErrorCode = details.nativeError;
 
             if (details.sniErrorNumber == 0)
@@ -1197,7 +1226,7 @@ namespace System.Data.SqlClient
                     /*
                         The error message should come back in the following format: "TCP Provider: MESSAGE TEXT"
                         If the message is received on a Win9x OS, the error message will not contain MESSAGE TEXT 
-                        If we get a error message with no message text, just return the entire message otherwise 
+                        If we get an error message with no message text, just return the entire message otherwise 
                         return just the message text.
                     */
                     if (len > 0)
@@ -1232,7 +1261,7 @@ namespace System.Data.SqlClient
                     }
                 }
             }
-            errorMessage = String.Format((IFormatProvider)null, "{0} (provider: {1}, error: {2} - {3})",
+            errorMessage = string.Format("{0} (provider: {1}, error: {2} - {3})",
                 sqlContextInfo, providerName, (int)details.sniErrorNumber, errorMessage);
 
             return new SqlError((int)details.nativeError, 0x00, TdsEnums.FATAL_ERROR_CLASS,
@@ -1281,14 +1310,21 @@ namespace System.Data.SqlClient
 
                         Debug.Assert(!stateObj._fResetConnectionSent, "Unexpected state for sending reset connection");
 
+                        if (_fPreserveTransaction)
                         {
                             // if we are reseting, set bit in header by or'ing with other value
-                            stateObj._outBuff[1] = (Byte)(stateObj._outBuff[1] | TdsEnums.ST_RESET_CONNECTION);
+                            stateObj._outBuff[1] = (byte)(stateObj._outBuff[1] | TdsEnums.ST_RESET_CONNECTION_PRESERVE_TRANSACTION);
+                        }
+                        else
+                        {
+                            // if we are reseting, set bit in header by or'ing with other value
+                            stateObj._outBuff[1] = (byte)(stateObj._outBuff[1] | TdsEnums.ST_RESET_CONNECTION);
                         }
 
                         if (!_fMARS)
                         {
                             _fResetConnection = false; // If not MARS, can turn off flag now.
+                            _fPreserveTransaction = false;
                         }
                         else
                         {
@@ -1391,9 +1427,9 @@ namespace System.Data.SqlClient
         //
         internal void WriteFloat(float v, TdsParserStateObject stateObj)
         {
-            byte[] bytes = BitConverter.GetBytes(v);
-
-            stateObj.WriteByteArray(bytes, bytes.Length, 0);
+            Span<byte> bytes = stackalloc byte[sizeof(float)];
+            FillFloatBytes(v, bytes);
+            stateObj.WriteByteSpan(bytes);
         }
 
         //
@@ -1465,15 +1501,17 @@ namespace System.Data.SqlClient
         //
         internal void WriteDouble(double v, TdsParserStateObject stateObj)
         {
-            byte[] bytes = BitConverter.GetBytes(v);
+            Span<byte> bytes = stackalloc byte[sizeof(double)];
+            FillDoubleBytes(v, bytes);
+            stateObj.WriteByteSpan(bytes);
 
-            stateObj.WriteByteArray(bytes, bytes.Length, 0);
         }
 
-        internal void PrepareResetConnection()
+        internal void PrepareResetConnection(bool preserveTransaction)
         {
             // Set flag to reset connection upon next use - only for use on shiloh!
             _fResetConnection = true;
+            _fPreserveTransaction = preserveTransaction;
         }
 
 
@@ -1537,7 +1575,7 @@ namespace System.Data.SqlClient
         {
             Debug.Assert((SniContext.Undefined != stateObj.SniContext) &&       // SniContext must not be Undefined
                 ((stateObj._attentionSent) || ((SniContext.Snix_Execute != stateObj.SniContext) && (SniContext.Snix_SendRows != stateObj.SniContext))),  // SniContext should not be Execute or SendRows unless attention was sent (and, therefore, we are looking for an ACK)
-                        String.Format("Unexpected SniContext on call to TryRun; SniContext={0}", stateObj.SniContext));
+                        $"Unexpected SniContext on call to TryRun; SniContext={stateObj.SniContext}");
 
             if (TdsParserState.Broken == State || TdsParserState.Closed == State)
             {
@@ -1590,7 +1628,7 @@ namespace System.Data.SqlClient
 
                 if (!IsValidTdsToken(token))
                 {
-                    Debug.Assert(false, String.Format((IFormatProvider)null, "unexpected token; token = {0,-2:X2}", token));
+                    Debug.Fail($"unexpected token; token = {token,-2:X2}");
                     _state = TdsParserState.Broken;
                     _connHandler.BreakConnection();
                     throw SQL.ParsingError();
@@ -1822,6 +1860,7 @@ namespace System.Data.SqlClient
                                     switch (env[ii].type)
                                     {
                                         case TdsEnums.ENV_BEGINTRAN:
+                                        case TdsEnums.ENV_ENLISTDTC:
                                             // When we get notification from the server of a new
                                             // transaction, we move any pending transaction over to
                                             // the current transaction, then we store the token in it.
@@ -1837,7 +1876,7 @@ namespace System.Data.SqlClient
                                             }
                                             else
                                             {
-                                                TransactionType transactionType = TransactionType.LocalFromTSQL;
+                                                TransactionType transactionType = (TdsEnums.ENV_BEGINTRAN == env[ii].type) ? TransactionType.LocalFromTSQL : TransactionType.Distributed;
                                                 _currentTransaction = new SqlInternalTransaction(_connHandler, transactionType, null, env[ii].newLongValue);
                                             }
                                             if (null != _statistics && !_statisticsIsInTransaction)
@@ -1845,11 +1884,14 @@ namespace System.Data.SqlClient
                                                 _statistics.SafeIncrement(ref _statistics._transactions);
                                             }
                                             _statisticsIsInTransaction = true;
+                                            _retainedTransactionId = SqlInternalTransaction.NullTransactionId;
                                             break;
+                                        case TdsEnums.ENV_DEFECTDTC:
+                                        case TdsEnums.ENV_TRANSACTIONENDED:
                                         case TdsEnums.ENV_COMMITTRAN:
-                                            // SQLHOT 483
                                             //  Must clear the retain id if the server-side transaction ends by anything other
                                             //  than rollback.
+                                            _retainedTransactionId = SqlInternalTransaction.NullTransactionId;
                                             goto case TdsEnums.ENV_ROLLBACKTRAN;
                                         case TdsEnums.ENV_ROLLBACKTRAN:
                                             // When we get notification of a completed transaction
@@ -1873,6 +1915,10 @@ namespace System.Data.SqlClient
                                                     //  Hold onto transaction id if distributed tran is rolled back.  This must
                                                     //  be sent to the server on subsequent executions even though the transaction
                                                     //  is considered to be rolled back.
+                                                    if (_currentTransaction.IsDistributed && _currentTransaction.IsActive)
+                                                    {
+                                                        _retainedTransactionId = env[ii].oldLongValue;
+                                                    }
                                                     _currentTransaction.Completed(TransactionState.Aborted);
                                                 }
                                                 else
@@ -1883,11 +1929,7 @@ namespace System.Data.SqlClient
                                             }
                                             _statisticsIsInTransaction = false;
                                             break;
-                                        case TdsEnums.ENV_ENLISTDTC:
-                                        case TdsEnums.ENV_DEFECTDTC:
-                                        case TdsEnums.ENV_TRANSACTIONENDED:
-                                            Debug.Assert(false, "Should have thrown if DTC token encountered");
-                                            break;
+
                                         default:
                                             _connHandler.OnEnvChange(env[ii]);
                                             break;
@@ -2026,7 +2068,7 @@ namespace System.Data.SqlClient
                             }
                             if (cmdHandler != null)
                             {
-                                cmdHandler.OnReturnValue(returnValue);
+                                cmdHandler.OnReturnValue(returnValue, stateObj);
                             }
                             break;
                         }
@@ -2042,6 +2084,16 @@ namespace System.Data.SqlClient
                         }
                     case TdsEnums.SQLTABNAME:
                         {
+                            if (null != dataStream)
+                            {
+                                MultiPartTableName[] tableNames;
+                                if (!TryProcessTableName(tokenLength, stateObj, out tableNames))
+                                {
+                                    return false;
+                                }
+                                dataStream.TableNames = tableNames;
+                            }
+                            else
                             {
                                 if (!stateObj.TrySkipBytes(tokenLength))
                                 {
@@ -2052,7 +2104,7 @@ namespace System.Data.SqlClient
                         }
 
                     default:
-                        Debug.Assert(false, "Unhandled token:  " + token.ToString(CultureInfo.InvariantCulture));
+                        Debug.Fail("Unhandled token:  " + token.ToString(CultureInfo.InvariantCulture));
                         break;
                 }
 
@@ -2074,7 +2126,7 @@ namespace System.Data.SqlClient
                 {
                     return false;
                 }
-                Debug.Assert(IsValidTdsToken(token), string.Format("DataReady is false, but next token is not valid: {0,-2:X2}", token));
+                Debug.Assert(IsValidTdsToken(token), $"DataReady is false, but next token is not valid: {token,-2:X2}");
             }
 #endif
 
@@ -2092,7 +2144,7 @@ namespace System.Data.SqlClient
             {
                 // Dev11 #344723: SqlClient stress hang System_Data!Tcp::ReadSync via a call to SqlDataReader::Close
                 // Spin until SendAttention has cleared _attentionSending, this prevents a race condition between receiving the attention ACK and setting _attentionSent
-                SpinWait.SpinUntil(() => !stateObj._attentionSending);
+                TryRunSetupSpinWaitContinuation(stateObj);
 
                 Debug.Assert(stateObj._attentionSent, "Attention ACK has been received without attention sent");
                 if (stateObj._attentionSent)
@@ -2115,6 +2167,9 @@ namespace System.Data.SqlClient
             }
             return true;
         }
+
+        // This is in its own method to avoid always allocating the lambda in TryRun 
+        private static void TryRunSetupSpinWaitContinuation(TdsParserStateObject stateObj) => SpinWait.SpinUntil(() => !stateObj._attentionSending);
 
         private bool TryProcessEnvChange(int tokenLength, TdsParserStateObject stateObj, out SqlEnvChange[] sqlEnvChange)
         {
@@ -2177,7 +2232,7 @@ namespace System.Data.SqlClient
 
                             string stringCodePage = env.newValue.Substring(TdsEnums.CHARSET_CODE_PAGE_OFFSET);
 
-                            _defaultCodePage = Int32.Parse(stringCodePage, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                            _defaultCodePage = int.Parse(stringCodePage, NumberStyles.Integer, CultureInfo.InvariantCulture);
                             _defaultEncoding = System.Text.Encoding.GetEncoding(_defaultCodePage);
                         }
 
@@ -2193,7 +2248,7 @@ namespace System.Data.SqlClient
                         }
                         // Only set on physical state object - this should only occur on LoginAck prior
                         // to MARS initialization!
-                        Int32 packetSize = Int32.Parse(env.newValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                        int packetSize = int.Parse(env.newValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
 
                         if (_physicalStateObj.SetPacketSize(packetSize))
                         {
@@ -2202,9 +2257,9 @@ namespace System.Data.SqlClient
                             _physicalStateObj.ClearAllWritePackets();
 
                             // Update SNI ConsumerInfo value to be resulting packet size
-                            UInt32 unsignedPacketSize = (UInt32)packetSize;
+                            uint unsignedPacketSize = (uint)packetSize;
 
-                            UInt32 result = _physicalStateObj.SetConnectionBufferSize(ref unsignedPacketSize);
+                            uint result = _physicalStateObj.SetConnectionBufferSize(ref unsignedPacketSize);
                             Debug.Assert(result == TdsEnums.SNI_SUCCESS, "Unexpected failure state upon calling SNISetInfo");
                         }
 
@@ -2215,7 +2270,7 @@ namespace System.Data.SqlClient
                         {
                             return false;
                         }
-                        _defaultLCID = Int32.Parse(env.newValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                        _defaultLCID = int.Parse(env.newValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
                         break;
 
                     case TdsEnums.ENV_COMPFLAGS:
@@ -2239,13 +2294,22 @@ namespace System.Data.SqlClient
                                 return false;
                             }
 
-                            // give the parser the new collation values in case parameters don't specify one
+                            // Give the parser the new collation values in case parameters don't specify one
                             _defaultCollation = env.newCollation;
-                            int newCodePage = GetCodePage(env.newCollation, stateObj);
-                            if (newCodePage != _defaultCodePage)
+
+                            // UTF8 collation
+                            if ((env.newCollation.info & TdsEnums.UTF8_IN_TDSCOLLATION) == TdsEnums.UTF8_IN_TDSCOLLATION)
                             {
-                                _defaultCodePage = newCodePage;
-                                _defaultEncoding = System.Text.Encoding.GetEncoding(_defaultCodePage);
+                                _defaultEncoding = Encoding.UTF8;
+                            }
+                            else
+                            {
+                                int newCodePage = GetCodePage(env.newCollation, stateObj);
+                                if (newCodePage != _defaultCodePage)
+                                {
+                                    _defaultCodePage = newCodePage;
+                                    _defaultEncoding = System.Text.Encoding.GetEncoding(_defaultCodePage);
+                                }
                             }
                             _defaultLCID = env.newCollation.LCID;
                         }
@@ -2270,7 +2334,9 @@ namespace System.Data.SqlClient
                     case TdsEnums.ENV_BEGINTRAN:
                     case TdsEnums.ENV_COMMITTRAN:
                     case TdsEnums.ENV_ROLLBACKTRAN:
-
+                    case TdsEnums.ENV_ENLISTDTC:
+                    case TdsEnums.ENV_DEFECTDTC:
+                    case TdsEnums.ENV_TRANSACTIONENDED:
                         if (!stateObj.TryReadByte(out byteLength))
                         {
                             return false;
@@ -2324,6 +2390,29 @@ namespace System.Data.SqlClient
                         }
                         break;
 
+                    case TdsEnums.ENV_PROMOTETRANSACTION:
+                        if (!stateObj.TryReadInt32(out env.newLength))
+                        { // new value has 4 byte length
+                            return false;
+                        }
+                        env.newBinValue = new byte[env.newLength];
+                        if (!stateObj.TryReadByteArray(env.newBinValue, env.newLength))
+                        { // read new value with 4 byte length
+                            return false;
+                        }
+
+                        if (!stateObj.TryReadByte(out byteLength))
+                        {
+                            return false;
+                        }
+                        env.oldLength = byteLength;
+                        Debug.Assert(0 == env.oldLength, "old length should be zero");
+
+                        // env.length includes 1 byte for type token
+                        env.length = 5 + env.newLength;
+                        break;
+
+                    case TdsEnums.ENV_TRANSACTIONMANAGERADDRESS:
                     case TdsEnums.ENV_SPRESETCONNECTIONACK:
                         if (!TryReadTwoBinaryFields(env, stateObj))
                         {
@@ -2378,16 +2467,8 @@ namespace System.Data.SqlClient
                         env.length = env.newLength + oldLength + 5; // 5=2*sizeof(UInt16)+sizeof(byte) [token+newLength+oldLength]
                         break;
 
-                    // ENVCHANGE tokens not supported by CoreCLR
-                    case TdsEnums.ENV_ENLISTDTC:
-                    case TdsEnums.ENV_DEFECTDTC:
-                    case TdsEnums.ENV_TRANSACTIONENDED:
-                    case TdsEnums.ENV_PROMOTETRANSACTION:
-                    case TdsEnums.ENV_TRANSACTIONMANAGERADDRESS:
-                        throw SQL.UnsupportedFeatureAndToken(_connHandler, ((TdsEnums.EnvChangeType)env.type).ToString());
-
                     default:
-                        Debug.Assert(false, "Unknown environment change token: " + env.type);
+                        Debug.Fail("Unknown environment change token: " + env.type);
                         break;
                 }
                 processedLength += env.length;
@@ -2407,7 +2488,7 @@ namespace System.Data.SqlClient
             }
             env.newLength = byteLength;
             env.newBinValue = new byte[env.newLength];
-            if (!stateObj.TryReadByteArray(env.newBinValue, 0, env.newLength))
+            if (!stateObj.TryReadByteArray(env.newBinValue, env.newLength))
             {
                 return false;
             }
@@ -2417,7 +2498,7 @@ namespace System.Data.SqlClient
             }
             env.oldLength = byteLength;
             env.oldBinValue = new byte[env.oldLength];
-            if (!stateObj.TryReadByteArray(env.oldBinValue, 0, env.oldLength))
+            if (!stateObj.TryReadByteArray(env.oldBinValue, env.oldLength))
             {
                 return false;
             }
@@ -2464,9 +2545,6 @@ namespace System.Data.SqlClient
             ushort curCmd;
             ushort status;
             int count;
-
-            // Can't retry TryProcessDone
-            stateObj._syncOverAsync = true;
 
             // status
             // command
@@ -2516,7 +2594,7 @@ namespace System.Data.SqlClient
             // situations where this can occur are: an invalid buffer received from client, login error
             // and the server refused our connection, and the case where we are trying to log in but
             // the server has reached its max connection limit.  Bottom line, we need to throw general
-            // error in the cases where we did not receive a error token along with the DONE_ERROR.
+            // error in the cases where we did not receive an error token along with the DONE_ERROR.
             if ((TdsEnums.DONE_ERROR == (TdsEnums.DONE_ERROR & status)) && stateObj.ErrorCount == 0 &&
                   stateObj._errorTokenReceived == false && (RunBehavior.Clean != (RunBehavior.Clean & run)))
             {
@@ -2665,7 +2743,7 @@ namespace System.Data.SqlClient
                 }
                 if (featureId != TdsEnums.FEATUREEXT_TERMINATOR)
                 {
-                    UInt32 dataLen;
+                    uint dataLen;
                     if (!stateObj.TryReadUInt32(out dataLen))
                     {
                         return false;
@@ -2673,7 +2751,7 @@ namespace System.Data.SqlClient
                     byte[] data = new byte[dataLen];
                     if (dataLen > 0)
                     {
-                        if (!stateObj.TryReadByteArray(data, 0, checked((int)dataLen)))
+                        if (!stateObj.TryReadByteArray(data, checked((int)dataLen)))
                         {
                             return false;
                         }
@@ -2690,12 +2768,12 @@ namespace System.Data.SqlClient
             {
                 throw SQL.ParsingError();
             }
-            UInt32 seqNum;
+            uint seqNum;
             if (!stateObj.TryReadUInt32(out seqNum))
             {
                 return false;
             }
-            if (seqNum == UInt32.MaxValue)
+            if (seqNum == uint.MaxValue)
             {
                 _connHandler.DoNotPoolThisConnection();
             }
@@ -2744,7 +2822,8 @@ namespace System.Data.SqlClient
                         sdata._deltaDirty = true;
                         if (!recoverable)
                         {
-                            checked { sdata._unrecoverableStatesCount++; }
+                            checked
+                            { sdata._unrecoverableStatesCount++; }
                         }
                     }
                     else
@@ -2763,7 +2842,8 @@ namespace System.Data.SqlClient
                                 }
                                 else
                                 {
-                                    checked { sdata._unrecoverableStatesCount++; }
+                                    checked
+                                    { sdata._unrecoverableStatesCount++; }
                                 }
                                 sv._recoverable = recoverable;
                             }
@@ -2778,7 +2858,7 @@ namespace System.Data.SqlClient
                 }
                 if (buffer != null)
                 {
-                    if (!stateObj.TryReadByteArray(buffer, 0, stateLen))
+                    if (!stateObj.TryReadByteArray(buffer, stateLen))
                     {
                         return false;
                     }
@@ -2816,13 +2896,13 @@ namespace System.Data.SqlClient
             }
 
             byte[] b = new byte[TdsEnums.VERSION_SIZE];
-            if (!stateObj.TryReadByteArray(b, 0, b.Length))
+            if (!stateObj.TryReadByteArray(b, b.Length))
             {
                 return false;
             }
-            a.tdsVersion = (UInt32)((((((b[0] << 8) | b[1]) << 8) | b[2]) << 8) | b[3]); // bytes are in motorola order (high byte first)
-            UInt32 majorMinor = a.tdsVersion & 0xff00ffff;
-            UInt32 increment = (a.tdsVersion >> 16) & 0xff;
+            a.tdsVersion = (uint)((((((b[0] << 8) | b[1]) << 8) | b[2]) << 8) | b[3]); // bytes are in motorola order (high byte first)
+            uint majorMinor = a.tdsVersion & 0xff00ffff;
+            uint increment = (a.tdsVersion >> 16) & 0xff;
 
             // Server responds:
             // 0x07000000 -> Sphinx         // Notice server response format is different for bwd compat
@@ -2834,15 +2914,18 @@ namespace System.Data.SqlClient
             switch (majorMinor)
             {
                 case TdsEnums.YUKON_MAJOR << 24 | TdsEnums.YUKON_RTM_MINOR:     // Yukon
-                    if (increment != TdsEnums.YUKON_INCREMENT) { throw SQL.InvalidTDSVersion(); }
+                    if (increment != TdsEnums.YUKON_INCREMENT)
+                    { throw SQL.InvalidTDSVersion(); }
                     _isYukon = true;
                     break;
                 case TdsEnums.KATMAI_MAJOR << 24 | TdsEnums.KATMAI_MINOR:
-                    if (increment != TdsEnums.KATMAI_INCREMENT) { throw SQL.InvalidTDSVersion(); }
+                    if (increment != TdsEnums.KATMAI_INCREMENT)
+                    { throw SQL.InvalidTDSVersion(); }
                     _isKatmai = true;
                     break;
                 case TdsEnums.DENALI_MAJOR << 24 | TdsEnums.DENALI_MINOR:
-                    if (increment != TdsEnums.DENALI_INCREMENT) { throw SQL.InvalidTDSVersion(); }
+                    if (increment != TdsEnums.DENALI_INCREMENT)
+                    { throw SQL.InvalidTDSVersion(); }
                     _isDenali = true;
                     break;
                 default:
@@ -3046,7 +3129,7 @@ namespace System.Data.SqlClient
                 return false;
             }
 
-            UInt32 userType;
+            uint userType;
 
             // read user type - 4 bytes Yukon, 2 backwards
             if (!stateObj.TryReadUInt32(out userType))
@@ -3096,7 +3179,7 @@ namespace System.Data.SqlClient
             // always use the nullable type for parameters if Shiloh or later
             // Sphinx sometimes sends fixed length return values
             rec.tdsType = rec.metaType.NullableType;
-            rec.isNullable = true;
+            rec.IsNullable = true;
             if (tdsLen == TdsEnums.SQL_USHORTVARMAXLEN)
             {
                 rec.metaType = MetaType.GetMaxMetaTypeFromMetaType(rec.metaType);
@@ -3145,9 +3228,13 @@ namespace System.Data.SqlClient
                     {
                         return false;
                     }
+                    if (rec.xmlSchemaCollection is null)
+                    {
+                        rec.xmlSchemaCollection = new SqlMetaDataXmlSchemaCollection();
+                    }
                     if (len != 0)
                     {
-                        if (!stateObj.TryReadString(len, out rec.xmlSchemaCollectionDatabase))
+                        if (!stateObj.TryReadString(len, out rec.xmlSchemaCollection.Database))
                         {
                             return false;
                         }
@@ -3159,7 +3246,7 @@ namespace System.Data.SqlClient
                     }
                     if (len != 0)
                     {
-                        if (!stateObj.TryReadString(len, out rec.xmlSchemaCollectionOwningSchema))
+                        if (!stateObj.TryReadString(len, out rec.xmlSchemaCollection.OwningSchema))
                         {
                             return false;
                         }
@@ -3173,7 +3260,7 @@ namespace System.Data.SqlClient
 
                     if (slen != 0)
                     {
-                        if (!stateObj.TryReadString(slen, out rec.xmlSchemaCollectionName))
+                        if (!stateObj.TryReadString(slen, out rec.xmlSchemaCollection.Name))
                         {
                             return false;
                         }
@@ -3188,18 +3275,26 @@ namespace System.Data.SqlClient
                     return false;
                 }
 
-                int codePage = GetCodePage(rec.collation, stateObj);
-
-                // if the column lcid is the same as the default, use the default encoder
-                if (codePage == _defaultCodePage)
+                // UTF8 collation
+                if ((rec.collation.info & TdsEnums.UTF8_IN_TDSCOLLATION) == TdsEnums.UTF8_IN_TDSCOLLATION)
                 {
-                    rec.codePage = _defaultCodePage;
-                    rec.encoding = _defaultEncoding;
+                    rec.encoding = Encoding.UTF8;
                 }
                 else
                 {
-                    rec.codePage = codePage;
-                    rec.encoding = System.Text.Encoding.GetEncoding(rec.codePage);
+                    int codePage = GetCodePage(rec.collation, stateObj);
+
+                    // If the column lcid is the same as the default, use the default encoder
+                    if (codePage == _defaultCodePage)
+                    {
+                        rec.codePage = _defaultCodePage;
+                        rec.encoding = _defaultEncoding;
+                    }
+                    else
+                    {
+                        rec.codePage = codePage;
+                        rec.encoding = System.Text.Encoding.GetEncoding(rec.codePage);
+                    }
                 }
             }
 
@@ -3212,13 +3307,13 @@ namespace System.Data.SqlClient
             }
 
             // always read as sql types
-            Debug.Assert(valLen < (ulong)(Int32.MaxValue), "ProcessReturnValue received data size > 2Gb");
+            Debug.Assert(valLen < (ulong)(int.MaxValue), "ProcessReturnValue received data size > 2Gb");
 
-            int intlen = valLen > (ulong)(Int32.MaxValue) ? Int32.MaxValue : (int)valLen;
+            int intlen = valLen > (ulong)(int.MaxValue) ? int.MaxValue : (int)valLen;
 
             if (rec.metaType.IsPlp)
             {
-                intlen = Int32.MaxValue;    // If plp data, read it all
+                intlen = int.MaxValue;    // If plp data, read it all
             }
 
             if (isNull)
@@ -3264,7 +3359,7 @@ namespace System.Data.SqlClient
             }
             else
             {
-                _physicalStateObj.WriteByte(sizeof(UInt32) + sizeof(byte));
+                _physicalStateObj.WriteByte(sizeof(uint) + sizeof(byte));
                 WriteUnsignedInt(collation.info, _physicalStateObj);
                 _physicalStateObj.WriteByte(collation.sortId);
             }
@@ -3347,7 +3442,7 @@ namespace System.Data.SqlClient
                         ThrowUnsupportedCollationEncountered(stateObj);
                     }
 
-                    Debug.Assert(codePage >= 0, string.Format("Invalid code page. codePage: {0}. cultureId: {1}", codePage, cultureId));
+                    Debug.Assert(codePage >= 0, $"Invalid code page. codePage: {codePage}. cultureId: {cultureId}");
                 }
             }
 
@@ -3523,7 +3618,7 @@ namespace System.Data.SqlClient
         private bool TryCommonProcessMetaData(TdsParserStateObject stateObj, _SqlMetaData col)
         {
             byte byteLen;
-            UInt32 userType;
+            uint userType;
 
             // read user type - 4 bytes Yukon, 2 backwards
             if (!stateObj.TryReadUInt32(out userType))
@@ -3538,9 +3633,9 @@ namespace System.Data.SqlClient
                 return false;
             }
 
-            col.updatability = (byte)((flags & TdsEnums.Updatability) >> 2);
-            col.isNullable = (TdsEnums.Nullable == (flags & TdsEnums.Nullable));
-            col.isIdentity = (TdsEnums.Identity == (flags & TdsEnums.Identity));
+            col.Updatability = (byte)((flags & TdsEnums.Updatability) >> 2);
+            col.IsNullable = (TdsEnums.Nullable == (flags & TdsEnums.Nullable));
+            col.IsIdentity = (TdsEnums.Identity == (flags & TdsEnums.Identity));
 
             // read second byte of column metadata flags
             if (!stateObj.TryReadByte(out flags))
@@ -3548,6 +3643,7 @@ namespace System.Data.SqlClient
                 return false;
             }
 
+            col.IsColumnSet = (TdsEnums.IsColumnSet == (flags & TdsEnums.IsColumnSet));
 
             byte tdsType;
             if (!stateObj.TryReadByte(out tdsType))
@@ -3574,7 +3670,7 @@ namespace System.Data.SqlClient
             col.metaType = MetaType.GetSqlDataType(tdsType, userType, col.length);
             col.type = col.metaType.SqlDbType;
 
-            col.tdsType = (col.isNullable ? col.metaType.NullableType : col.metaType.TDSType);
+            col.tdsType = (col.IsNullable ? col.metaType.NullableType : col.metaType.TDSType);
 
             {
                 if (TdsEnums.SQLUDT == tdsType)
@@ -3595,7 +3691,7 @@ namespace System.Data.SqlClient
                                  "Invalid streaming datatype");
                     col.metaType = MetaType.GetMaxMetaTypeFromMetaType(col.metaType);
                     Debug.Assert(col.metaType.IsLong, "Max datatype not IsLong");
-                    col.length = Int32.MaxValue;
+                    col.length = int.MaxValue;
                     if (tdsType == TdsEnums.SQLXMLTYPE)
                     {
                         byte schemapresent;
@@ -3610,9 +3706,13 @@ namespace System.Data.SqlClient
                             {
                                 return false;
                             }
+                            if (col.xmlSchemaCollection is null)
+                            {
+                                col.xmlSchemaCollection = new SqlMetaDataXmlSchemaCollection();
+                            }
                             if (byteLen != 0)
                             {
-                                if (!stateObj.TryReadString(byteLen, out col.xmlSchemaCollectionDatabase))
+                                if (!stateObj.TryReadString(byteLen, out col.xmlSchemaCollection.Database))
                                 {
                                     return false;
                                 }
@@ -3624,7 +3724,7 @@ namespace System.Data.SqlClient
                             }
                             if (byteLen != 0)
                             {
-                                if (!stateObj.TryReadString(byteLen, out col.xmlSchemaCollectionOwningSchema))
+                                if (!stateObj.TryReadString(byteLen, out col.xmlSchemaCollection.OwningSchema))
                                 {
                                     return false;
                                 }
@@ -3637,7 +3737,7 @@ namespace System.Data.SqlClient
                             }
                             if (byteLen != 0)
                             {
-                                if (!stateObj.TryReadString(shortLen, out col.xmlSchemaCollectionName))
+                                if (!stateObj.TryReadString(shortLen, out col.xmlSchemaCollection.Name))
                                 {
                                     return false;
                                 }
@@ -3684,7 +3784,7 @@ namespace System.Data.SqlClient
                         break;
 
                     default:
-                        Debug.Assert(false, "Unknown VariableTime type!");
+                        Debug.Fail("Unknown VariableTime type!");
                         break;
                 }
             }
@@ -3697,17 +3797,25 @@ namespace System.Data.SqlClient
                     return false;
                 }
 
-                int codePage = GetCodePage(col.collation, stateObj);
-
-                if (codePage == _defaultCodePage)
+                // UTF8 collation
+                if ((col.collation.info & TdsEnums.UTF8_IN_TDSCOLLATION) == TdsEnums.UTF8_IN_TDSCOLLATION)
                 {
-                    col.codePage = _defaultCodePage;
-                    col.encoding = _defaultEncoding;
+                    col.encoding = Encoding.UTF8;
                 }
                 else
                 {
-                    col.codePage = codePage;
-                    col.encoding = System.Text.Encoding.GetEncoding(col.codePage);
+                    int codePage = GetCodePage(col.collation, stateObj);
+
+                    if (codePage == _defaultCodePage)
+                    {
+                        col.codePage = _defaultCodePage;
+                        col.encoding = _defaultEncoding;
+                    }
+                    else
+                    {
+                        col.codePage = codePage;
+                        col.encoding = System.Text.Encoding.GetEncoding(col.codePage);
+                    }
                 }
             }
 
@@ -3735,6 +3843,73 @@ namespace System.Data.SqlClient
             return true;
         }
 
+        private void WriteUDTMetaData(object value, string database, string schema, string type, TdsParserStateObject stateObj)
+        {
+            // database
+            if (string.IsNullOrEmpty(database))
+            {
+                stateObj.WriteByte(0);
+            }
+            else
+            {
+                stateObj.WriteByte((byte)database.Length);
+                WriteString(database, stateObj);
+            }
+
+            // schema
+            if (string.IsNullOrEmpty(schema))
+            {
+                stateObj.WriteByte(0);
+            }
+            else
+            {
+                stateObj.WriteByte((byte)schema.Length);
+                WriteString(schema, stateObj);
+            }
+
+            // type
+            if (string.IsNullOrEmpty(type))
+            {
+                stateObj.WriteByte(0);
+            }
+            else
+            {
+                stateObj.WriteByte((byte)type.Length);
+                WriteString(type, stateObj);
+            }
+        }
+
+        internal bool TryProcessTableName(int length, TdsParserStateObject stateObj, out MultiPartTableName[] multiPartTableNames)
+        {
+            int tablesAdded = 0;
+
+            MultiPartTableName[] tables = new MultiPartTableName[1];
+            MultiPartTableName mpt;
+            while (length > 0)
+            {
+                if (!TryProcessOneTable(stateObj, ref length, out mpt))
+                {
+                    multiPartTableNames = null;
+                    return false;
+                }
+                if (tablesAdded == 0)
+                {
+                    tables[tablesAdded] = mpt;
+                }
+                else
+                {
+                    MultiPartTableName[] newTables = new MultiPartTableName[tables.Length + 1];
+                    Array.Copy(tables, 0, newTables, 0, tables.Length);
+                    newTables[tables.Length] = mpt;
+                    tables = newTables;
+                }
+
+                tablesAdded++;
+            }
+
+            multiPartTableNames = tables;
+            return true;
+        }
 
         private bool TryProcessOneTable(TdsParserStateObject stateObj, ref int length, out MultiPartTableName multiPartTableName)
         {
@@ -3835,8 +4010,8 @@ namespace System.Data.SqlClient
                 { // colnum, ignore
                     return false;
                 }
-                if (!stateObj.TryReadByte(out ignored))
-                { // tablenum, ignore
+                if (!stateObj.TryReadByte(out col.tableNum))
+                {
                     return false;
                 }
 
@@ -3847,13 +4022,13 @@ namespace System.Data.SqlClient
                     return false;
                 }
 
-                col.isDifferentName = (TdsEnums.SQLDifferentName == (status & TdsEnums.SQLDifferentName));
-                col.isExpression = (TdsEnums.SQLExpression == (status & TdsEnums.SQLExpression));
-                col.isKey = (TdsEnums.SQLKey == (status & TdsEnums.SQLKey));
-                col.isHidden = (TdsEnums.SQLHidden == (status & TdsEnums.SQLHidden));
+                col.IsDifferentName = (TdsEnums.SQLDifferentName == (status & TdsEnums.SQLDifferentName));
+                col.IsExpression = (TdsEnums.SQLExpression == (status & TdsEnums.SQLExpression));
+                col.IsKey = (TdsEnums.SQLKey == (status & TdsEnums.SQLKey));
+                col.IsHidden = (TdsEnums.SQLHidden == (status & TdsEnums.SQLHidden));
 
                 // read off the base table name if it is different than the select list column name
-                if (TdsEnums.SQLDifferentName == (status & TdsEnums.SQLDifferentName))
+                if (col.IsDifferentName)
                 {
                     byte len;
                     if (!stateObj.TryReadByte(out len))
@@ -3866,10 +4041,18 @@ namespace System.Data.SqlClient
                     }
                 }
 
-
-                if (TdsEnums.SQLExpression == (status & TdsEnums.SQLExpression))
+                // Fixup column name - only if result of a table - that is if it was not the result of
+                // an expression.
+                if ((reader.TableNames != null) && (col.tableNum > 0))
                 {
-                    col.updatability = 0;
+                    Debug.Assert(reader.TableNames.Length >= col.tableNum, "invalid tableNames array!");
+                    col.multiPartTableName = reader.TableNames[col.tableNum - 1];
+                }
+
+                // Expressions are readonly
+                if (col.IsExpression)
+                {
+                    col.Updatability = 0;
                 }
             }
 
@@ -4011,7 +4194,7 @@ namespace System.Data.SqlClient
                     // We only read up to 2Gb. Throw if data is larger. Very large data
                     // should be read in chunks in sequential read mode
                     // For Plp columns, we may have gotten only the length of the first chunk
-                    if (!TryReadSqlValue(data, md, md.metaType.IsPlp ? (Int32.MaxValue) : (int)len, stateObj))
+                    if (!TryReadSqlValue(data, md, md.metaType.IsPlp ? (int.MaxValue) : (int)len, stateObj))
                     {
                         return false;
                     }
@@ -4122,7 +4305,7 @@ namespace System.Data.SqlClient
                     break;
 
                 default:
-                    Debug.Assert(false, "unknown null sqlType!" + md.type.ToString());
+                    Debug.Fail("unknown null sqlType!" + md.type.ToString());
                     break;
             }
 
@@ -4264,7 +4447,7 @@ namespace System.Data.SqlClient
                 case TdsEnums.SQLNVARCHAR:
                 case TdsEnums.SQLNTEXT:
                     {
-                        String s = null;
+                        string s = null;
 
                         if (isPlp)
                         {
@@ -4276,7 +4459,7 @@ namespace System.Data.SqlClient
                             }
                             if (length > 0)
                             {
-                                s = new String(cc, 0, length);
+                                s = new string(cc, 0, length);
                             }
                             else
                             {
@@ -4296,7 +4479,7 @@ namespace System.Data.SqlClient
                     }
 
                 default:
-                    Debug.Assert(false, "Unknown tds type for SqlString!" + type.ToString(CultureInfo.InvariantCulture));
+                    Debug.Fail("Unknown tds type for SqlString!" + type.ToString(CultureInfo.InvariantCulture));
                     break;
             }
 
@@ -4312,7 +4495,7 @@ namespace System.Data.SqlClient
             if (isPlp)
             {
                 // We must read the column value completely, no matter what length is passed in
-                length = Int32.MaxValue;
+                length = int.MaxValue;
             }
             switch (tdsType)
             {
@@ -4347,7 +4530,7 @@ namespace System.Data.SqlClient
                     {
                         //Debug.Assert(length > 0 && length < (long)(Int32.MaxValue), "Bad length for column");
                         b = new byte[length];
-                        if (!stateObj.TryReadByteArray(b, 0, length))
+                        if (!stateObj.TryReadByteArray(b, length))
                         {
                             return false;
                         }
@@ -4407,37 +4590,37 @@ namespace System.Data.SqlClient
 
         private bool TryReadSqlDateTime(SqlBuffer value, byte tdsType, int length, byte scale, TdsParserStateObject stateObj)
         {
-            byte[] datetimeBuffer = new byte[length];
+            Span<byte> datetimeBuffer = ((uint)length <= 16) ? stackalloc byte[16] : new byte[length];
 
-            if (!stateObj.TryReadByteArray(datetimeBuffer, 0, length))
+            if (!stateObj.TryReadByteArray(datetimeBuffer, length))
             {
                 return false;
             }
-
+            ReadOnlySpan<byte> dateTimeData = datetimeBuffer.Slice(0, length);
             switch (tdsType)
             {
                 case TdsEnums.SQLDATE:
                     Debug.Assert(length == 3, "invalid length for date type!");
-                    value.SetToDate(datetimeBuffer);
+                    value.SetToDate(dateTimeData);
                     break;
 
                 case TdsEnums.SQLTIME:
                     Debug.Assert(3 <= length && length <= 5, "invalid length for time type!");
-                    value.SetToTime(datetimeBuffer, length, scale);
+                    value.SetToTime(dateTimeData, scale);
                     break;
 
                 case TdsEnums.SQLDATETIME2:
                     Debug.Assert(6 <= length && length <= 8, "invalid length for datetime2 type!");
-                    value.SetToDateTime2(datetimeBuffer, length, scale);
+                    value.SetToDateTime2(dateTimeData, scale);
                     break;
 
                 case TdsEnums.SQLDATETIMEOFFSET:
                     Debug.Assert(8 <= length && length <= 10, "invalid length for datetimeoffset type!");
-                    value.SetToDateTimeOffset(datetimeBuffer, length, scale);
+                    value.SetToDateTimeOffset(dateTimeData, scale);
                     break;
 
                 default:
-                    Debug.Assert(false, "ReadSqlDateTime is called with the wrong tdsType");
+                    Debug.Fail("ReadSqlDateTime is called with the wrong tdsType");
                     break;
             }
 
@@ -4627,7 +4810,7 @@ namespace System.Data.SqlClient
 
                         byte[] b = new byte[length];
 
-                        if (!stateObj.TryReadByteArray(b, 0, length))
+                        if (!stateObj.TryReadByteArray(b, length))
                         {
                             return false;
                         }
@@ -4644,7 +4827,7 @@ namespace System.Data.SqlClient
                         // Note: Better not come here with plp data!!
                         Debug.Assert(length <= TdsEnums.MAXSIZE);
                         byte[] b = new byte[length];
-                        if (!stateObj.TryReadByteArray(b, 0, length))
+                        if (!stateObj.TryReadByteArray(b, length))
                         {
                             return false;
                         }
@@ -4661,7 +4844,7 @@ namespace System.Data.SqlClient
                     break;
 
                 default:
-                    Debug.Assert(false, "Unknown SqlType!" + tdsType.ToString(CultureInfo.InvariantCulture));
+                    Debug.Fail("Unknown SqlType!" + tdsType.ToString(CultureInfo.InvariantCulture));
                     break;
             } // switch
 
@@ -4852,7 +5035,7 @@ namespace System.Data.SqlClient
                     }
 
                 default:
-                    Debug.Assert(false, "Unknown tds type in SqlVariant!" + type.ToString(CultureInfo.InvariantCulture));
+                    Debug.Fail("Unknown tds type in SqlVariant!" + type.ToString(CultureInfo.InvariantCulture));
                     break;
             } // switch
 
@@ -4958,10 +5141,10 @@ namespace System.Data.SqlClient
                 case TdsEnums.SQLUNIQUEID:
                     {
                         System.Guid guid = (System.Guid)value;
-                        byte[] b = guid.ToByteArray();
-
+                        Span<byte> b = stackalloc byte[16];
+                        TdsParser.FillGuidBytes(guid, b);
                         Debug.Assert((length == b.Length) && (length == 16), "Invalid length for guid type in com+ object");
-                        stateObj.WriteByteArray(b, length, 0);
+                        stateObj.WriteByteSpan(b);
                         break;
                     }
 
@@ -4989,15 +5172,15 @@ namespace System.Data.SqlClient
 
                 case TdsEnums.SQLMONEY:
                     {
-                        WriteCurrency((Decimal)value, 8, stateObj);
+                        WriteCurrency((decimal)value, 8, stateObj);
                         break;
                     }
 
                 case TdsEnums.SQLNUMERICN:
                     {
                         stateObj.WriteByte(mt.Precision); //propbytes: precision
-                        stateObj.WriteByte((byte)((Decimal.GetBits((Decimal)value)[3] & 0x00ff0000) >> 0x10)); // propbytes: scale
-                        WriteDecimal((Decimal)value, stateObj);
+                        stateObj.WriteByte((byte)((decimal.GetBits((decimal)value)[3] & 0x00ff0000) >> 0x10)); // propbytes: scale
+                        WriteDecimal((decimal)value, stateObj);
                         break;
                     }
 
@@ -5012,7 +5195,7 @@ namespace System.Data.SqlClient
                     break;
 
                 default:
-                    Debug.Assert(false, "unknown tds type for sqlvariant!");
+                    Debug.Fail("unknown tds type for sqlvariant!");
                     break;
             } // switch
             // return point for accumulated writes, note: non-accumulated writes returned from their case statements
@@ -5115,12 +5298,14 @@ namespace System.Data.SqlClient
                 case TdsEnums.SQLUNIQUEID:
                     {
                         System.Guid guid = (System.Guid)value;
-                        byte[] b = guid.ToByteArray();
 
+                        Span<byte> b = stackalloc byte[16];
+                        FillGuidBytes(guid, b);
                         length = b.Length;
                         Debug.Assert(length == 16, "Invalid length for guid type in com+ object");
                         WriteSqlVariantHeader(18, metatype.TDSType, metatype.PropBytes, stateObj);
-                        stateObj.WriteByteArray(b, length, 0);
+                        stateObj.WriteByteSpan(b);
+
                         break;
                     }
 
@@ -5152,7 +5337,7 @@ namespace System.Data.SqlClient
                 case TdsEnums.SQLMONEY:
                     {
                         WriteSqlVariantHeader(10, metatype.TDSType, metatype.PropBytes, stateObj);
-                        WriteCurrency((Decimal)value, 8, stateObj);
+                        WriteCurrency((decimal)value, 8, stateObj);
                         break;
                     }
 
@@ -5160,8 +5345,8 @@ namespace System.Data.SqlClient
                     {
                         WriteSqlVariantHeader(21, metatype.TDSType, metatype.PropBytes, stateObj);
                         stateObj.WriteByte(metatype.Precision); //propbytes: precision
-                        stateObj.WriteByte((byte)((Decimal.GetBits((Decimal)value)[3] & 0x00ff0000) >> 0x10)); // propbytes: scale
-                        WriteDecimal((Decimal)value, stateObj);
+                        stateObj.WriteByte((byte)((decimal.GetBits((decimal)value)[3] & 0x00ff0000) >> 0x10)); // propbytes: scale
+                        WriteDecimal((decimal)value, stateObj);
                         break;
                     }
 
@@ -5178,7 +5363,7 @@ namespace System.Data.SqlClient
                     break;
 
                 default:
-                    Debug.Assert(false, "unknown tds type for sqlvariant!");
+                    Debug.Fail("unknown tds type for sqlvariant!");
                     break;
             } // switch
             // return point for accumulated writes, note: non-accumulated writes returned from their case statements
@@ -5211,7 +5396,7 @@ namespace System.Data.SqlClient
 
         private void WriteSqlMoney(SqlMoney value, int length, TdsParserStateObject stateObj)
         {
-            int[] bits = Decimal.GetBits(value.Value);
+            int[] bits = decimal.GetBits(value.Value);
 
             // this decimal should be scaled by 10000 (regardless of what the incoming decimal was scaled by)
             bool isNeg = (0 != (bits[3] & unchecked((int)0x80000000)));
@@ -5222,7 +5407,7 @@ namespace System.Data.SqlClient
 
             if (length == 4)
             {
-                Decimal decimalValue = value.Value;
+                decimal decimalValue = value.Value;
 
                 // validate the value can be represented as a small money
                 if (decimalValue < TdsEnums.SQL_SMALL_MONEY_MIN || decimalValue > TdsEnums.SQL_SMALL_MONEY_MAX)
@@ -5239,10 +5424,10 @@ namespace System.Data.SqlClient
             }
         }
 
-        private void WriteCurrency(Decimal value, int length, TdsParserStateObject stateObj)
+        private void WriteCurrency(decimal value, int length, TdsParserStateObject stateObj)
         {
             SqlMoney m = new SqlMoney(value);
-            int[] bits = Decimal.GetBits(m.Value);
+            int[] bits = decimal.GetBits(m.Value);
 
             // this decimal should be scaled by 10000 (regardless of what the incoming decimal was scaled by)
             bool isNeg = (0 != (bits[3] & unchecked((int)0x80000000)));
@@ -5328,7 +5513,10 @@ namespace System.Data.SqlClient
             int i;
 
             if (null == bits)
+            {
                 bits = new int[4];
+                stateObj._decimalBits = bits;
+            }
             else
             {
                 for (i = 0; i < bits.Length; i++)
@@ -5365,7 +5553,7 @@ namespace System.Data.SqlClient
 
         internal static decimal AdjustDecimalScale(decimal value, int newScale)
         {
-            int oldScale = (Decimal.GetBits(value)[3] & 0x00ff0000) >> 0x10;
+            int oldScale = (decimal.GetBits(value)[3] & 0x00ff0000) >> 0x10;
 
             if (newScale != oldScale)
             {
@@ -5396,7 +5584,7 @@ namespace System.Data.SqlClient
 
         private void WriteDecimal(decimal value, TdsParserStateObject stateObj)
         {
-            stateObj._decimalBits = Decimal.GetBits(value);
+            stateObj._decimalBits = decimal.GetBits(value);
             Debug.Assert(null != stateObj._decimalBits, "decimalBits should be filled in at TdsExecuteRPC time");
 
             /*
@@ -5691,7 +5879,7 @@ namespace System.Data.SqlClient
                         return true;
                     }
                 default:
-                    Debug.Assert(false, "Unknown token length!");
+                    Debug.Fail("Unknown token length!");
                     tokenLength = 0;
                     return true;
             }
@@ -5854,16 +6042,116 @@ namespace System.Data.SqlClient
             return len;
         }
 
-        internal void TdsLogin(SqlLogin rec, TdsEnums.FeatureExtension requestedFeatures, SessionData recoverySessionData)
+        internal int WriteFedAuthFeatureRequest(FederatedAuthenticationFeatureExtensionData fedAuthFeatureData,
+                                                bool write /* if false just calculates the length */)
+        {
+            Debug.Assert(fedAuthFeatureData.libraryType == TdsEnums.FedAuthLibrary.SecurityToken,
+                "only Security Token are supported in writing feature request");
+
+            int dataLen = 0;
+            int totalLen = 0;
+
+            // set dataLen and totalLen
+            switch (fedAuthFeatureData.libraryType)
+            {
+                case TdsEnums.FedAuthLibrary.SecurityToken:
+                    Debug.Assert(fedAuthFeatureData.accessToken != null, "AccessToken should not be null.");
+                    dataLen = 1 + sizeof(int) + fedAuthFeatureData.accessToken.Length; // length of feature data = 1 byte for library and echo, security token length and sizeof(int) for token lengh itself
+                    break;
+                default:
+                    Debug.Fail("Unrecognized library type for fedauth feature extension request");
+                    break;
+            }
+
+            totalLen = dataLen + 5; // length of feature id (1 byte), data length field (4 bytes), and feature data (dataLen)
+
+            // write feature id
+            if (write)
+            {
+                _physicalStateObj.WriteByte(TdsEnums.FEATUREEXT_FEDAUTH);
+
+                // set options
+                byte options = 0x00;
+
+                // set upper 7 bits of options to indicate fed auth library type
+                switch (fedAuthFeatureData.libraryType)
+                {
+                    case TdsEnums.FedAuthLibrary.SecurityToken:
+                        Debug.Assert(_connHandler._federatedAuthenticationRequested == true, "_federatedAuthenticationRequested field should be true");
+                        options |= TdsEnums.FEDAUTHLIB_SECURITYTOKEN << 1;
+                        break;
+                    default:
+                        Debug.Fail("Unrecognized FedAuthLibrary type for feature extension request");
+                        break;
+                }
+
+                options |= (byte)(fedAuthFeatureData.fedAuthRequiredPreLoginResponse == true ? 0x01 : 0x00);
+
+                // write dataLen and options
+                WriteInt(dataLen, _physicalStateObj);
+                _physicalStateObj.WriteByte(options);
+
+                // write accessToken for FedAuthLibrary.SecurityToken
+                switch (fedAuthFeatureData.libraryType)
+                {
+                    case TdsEnums.FedAuthLibrary.SecurityToken:
+                        WriteInt(fedAuthFeatureData.accessToken.Length, _physicalStateObj);
+                        _physicalStateObj.WriteByteArray(fedAuthFeatureData.accessToken, fedAuthFeatureData.accessToken.Length, 0);
+                        break;
+                    default:
+                        Debug.Fail("Unrecognized FedAuthLibrary type for feature extension request");
+                        break;
+                }
+            }
+            return totalLen;
+        }
+
+        internal int WriteGlobalTransactionsFeatureRequest(bool write /* if false just calculates the length */)
+        {
+            int len = 5; // 1byte = featureID, 4bytes = featureData length
+
+            if (write)
+            {
+                // Write Feature ID
+                _physicalStateObj.WriteByte(TdsEnums.FEATUREEXT_GLOBALTRANSACTIONS);
+                WriteInt(0, _physicalStateObj); // we don't send any data
+            }
+
+            return len;
+        }
+        internal int WriteUTF8SupportFeatureRequest(bool write /* if false just calculates the length */)
+        {
+            int len = 5; // 1byte = featureID, 4bytes = featureData length, sizeof(DWORD)
+
+            if (write)
+            {
+                // Write Feature ID
+                _physicalStateObj.WriteByte(TdsEnums.FEATUREEXT_UTF8SUPPORT);
+                WriteInt(0, _physicalStateObj); // we don't send any data
+            }
+
+            return len;
+        }
+
+        internal void TdsLogin(SqlLogin rec, TdsEnums.FeatureExtension requestedFeatures, SessionData recoverySessionData, FederatedAuthenticationFeatureExtensionData? fedAuthFeatureExtensionData)
         {
             _physicalStateObj.SetTimeoutSeconds(rec.timeout);
 
             Debug.Assert(recoverySessionData == null || (requestedFeatures & TdsEnums.FeatureExtension.SessionRecovery) != 0, "Recovery session data without session recovery feature request");
             Debug.Assert(TdsEnums.MAXLEN_HOSTNAME >= rec.hostName.Length, "_workstationId.Length exceeds the max length for this value");
 
+            Debug.Assert(!rec.useSSPI || (requestedFeatures & TdsEnums.FeatureExtension.FedAuth) == 0, "Cannot use both SSPI and FedAuth");
+            Debug.Assert(fedAuthFeatureExtensionData == null || (requestedFeatures & TdsEnums.FeatureExtension.FedAuth) != 0, "fedAuthFeatureExtensionData provided without fed auth feature request");
+            Debug.Assert(fedAuthFeatureExtensionData != null || (requestedFeatures & TdsEnums.FeatureExtension.FedAuth) == 0, "Fed Auth feature requested without specifying fedAuthFeatureExtensionData.");
+
             Debug.Assert(rec.userName == null || (rec.userName != null && TdsEnums.MAXLEN_USERNAME >= rec.userName.Length), "_userID.Length exceeds the max length for this value");
+            Debug.Assert(rec.credential == null || (rec.credential != null && TdsEnums.MAXLEN_USERNAME >= rec.credential.UserId.Length), "_credential.UserId.Length exceeds the max length for this value");
 
             Debug.Assert(rec.password == null || (rec.password != null && TdsEnums.MAXLEN_PASSWORD >= rec.password.Length), "_password.Length exceeds the max length for this value");
+            Debug.Assert(rec.credential == null || (rec.credential != null && TdsEnums.MAXLEN_PASSWORD >= rec.credential.Password.Length), "_credential.Password.Length exceeds the max length for this value");
+
+            Debug.Assert(rec.credential != null || rec.userName != null || rec.password != null, "cannot mix the new secure password system and the connection string based password");
+            Debug.Assert(rec.newSecurePassword != null || rec.newPassword != null, "cannot have both new secure change password and string based change password");
             Debug.Assert(TdsEnums.MAXLEN_APPNAME >= rec.applicationName.Length, "_applicationName.Length exceeds the max length for this value");
             Debug.Assert(TdsEnums.MAXLEN_SERVERNAME >= rec.serverName.Length, "_dataSource.Length exceeds the max length for this value");
             Debug.Assert(TdsEnums.MAXLEN_LANGUAGE >= rec.language.Length, "_currentLanguage .Length exceeds the max length for this value");
@@ -5876,18 +6164,34 @@ namespace System.Data.SqlClient
 
             // get the password up front to use in sspi logic below
             byte[] encryptedPassword = null;
+            byte[] encryptedChangePassword = null;
             int encryptedPasswordLengthInBytes;
+            int encryptedChangePasswordLengthInBytes;
             bool useFeatureExt = (requestedFeatures != TdsEnums.FeatureExtension.None);
 
             string userName;
 
+            if (rec.credential != null)
+            {
+                userName = rec.credential.UserId;
+                encryptedPasswordLengthInBytes = rec.credential.Password.Length * 2;
+            }
+            else
             {
                 userName = rec.userName;
-                encryptedPassword = TdsParserStaticMethods.EncryptPassword(rec.password);
+                encryptedPassword = TdsParserStaticMethods.ObfuscatePassword(rec.password);
                 encryptedPasswordLengthInBytes = encryptedPassword.Length;  // password in clear text is already encrypted and its length is in byte
             }
 
-
+            if (rec.newSecurePassword != null)
+            {
+                encryptedChangePasswordLengthInBytes = rec.newSecurePassword.Length * 2;
+            }
+            else
+            {
+                encryptedChangePassword = TdsParserStaticMethods.ObfuscatePassword(rec.newPassword);
+                encryptedChangePasswordLengthInBytes = encryptedChangePassword.Length;
+            }
 
             // set the message type
             _physicalStateObj._outputMessageType = TdsEnums.MT_LOGIN7;
@@ -5913,15 +6217,17 @@ namespace System.Data.SqlClient
             }
 
             // allocate memory for SSPI variables
+            byte[] rentedSSPIBuff = null;
             byte[] outSSPIBuff = null;
-            UInt32 outSSPILength = 0;
+            uint outSSPILength = 0;
 
-            // only add lengths of password and username if not using SSPI
-            if (!rec.useSSPI)
+            // only add lengths of password and username if not using SSPI or requesting federated authentication info
+            if (!rec.useSSPI && !_connHandler._federatedAuthenticationRequested)
             {
                 checked
                 {
-                    length += (userName.Length * 2) + encryptedPasswordLengthInBytes;
+                    length += (userName.Length * 2) + encryptedPasswordLengthInBytes
+                    + encryptedChangePasswordLengthInBytes;
                 }
             }
             else
@@ -5929,21 +6235,19 @@ namespace System.Data.SqlClient
                 if (rec.useSSPI)
                 {
                     // now allocate proper length of buffer, and set length
-                    outSSPIBuff = new byte[s_maxSSPILength];
+                    rentedSSPIBuff = ArrayPool<byte>.Shared.Rent((int)s_maxSSPILength);
+                    outSSPIBuff = rentedSSPIBuff;
                     outSSPILength = s_maxSSPILength;
 
                     // Call helper function for SSPI data and actual length.
                     // Since we don't have SSPI data from the server, send null for the
                     // byte[] buffer and 0 for the int length.
-                    Debug.Assert(SniContext.Snix_Login == _physicalStateObj.SniContext, String.Format((IFormatProvider)null, "Unexpected SniContext. Expecting Snix_Login, actual value is '{0}'", _physicalStateObj.SniContext));
+                    Debug.Assert(SniContext.Snix_Login == _physicalStateObj.SniContext, $"Unexpected SniContext. Expecting Snix_Login, actual value is '{_physicalStateObj.SniContext}'");
                     _physicalStateObj.SniContext = SniContext.Snix_LoginSspi;
 
-                    SSPIData(null, 0, outSSPIBuff, ref outSSPILength);
-                    if (TdsParserStateObjectFactory.UseManagedSNI)
-                    {
-                        outSSPILength = outSSPIBuff != null ? (uint)outSSPIBuff.Length : 0;
-                    }
-                    if (outSSPILength > Int32.MaxValue)
+                    SSPIData(null, 0, ref outSSPIBuff, ref outSSPILength);
+
+                    if (outSSPILength > int.MaxValue)
                     {
                         throw SQL.InvalidSSPIPacketSize();  // SqlBu 332503
                     }
@@ -5951,7 +6255,7 @@ namespace System.Data.SqlClient
 
                     checked
                     {
-                        length += (Int32)outSSPILength;
+                        length += (int)outSSPILength;
                     }
                 }
             }
@@ -5963,7 +6267,21 @@ namespace System.Data.SqlClient
                 if ((requestedFeatures & TdsEnums.FeatureExtension.SessionRecovery) != 0)
                 {
                     length += WriteSessionRecoveryFeatureRequest(recoverySessionData, false);
-                };
+                }
+                if ((requestedFeatures & TdsEnums.FeatureExtension.FedAuth) != 0)
+                {
+                    Debug.Assert(fedAuthFeatureExtensionData != null, "fedAuthFeatureExtensionData should not null.");
+                    length += WriteFedAuthFeatureRequest(fedAuthFeatureExtensionData.Value, write: false);
+                }
+                if ((requestedFeatures & TdsEnums.FeatureExtension.GlobalTransactions) != 0)
+                {
+                    length += WriteGlobalTransactionsFeatureRequest(false);
+                }
+                if ((requestedFeatures & TdsEnums.FeatureExtension.UTF8Support) != 0)
+                {
+                    length += WriteUTF8SupportFeatureRequest(false);
+                }
+
                 length++; // for terminator
             }
 
@@ -6036,6 +6354,10 @@ namespace System.Data.SqlClient
                 }
 
                 // 4th one
+                if (!string.IsNullOrEmpty(rec.newPassword) || (rec.newSecurePassword != null && rec.newSecurePassword.Length != 0))
+                {
+                    log7Flags |= 1 << 24;
+                }
                 if (rec.userInstance)
                 {
                     log7Flags |= 1 << 26;
@@ -6134,7 +6456,7 @@ namespace System.Data.SqlClient
                 offset += rec.attachDBFilename.Length * 2;
 
                 WriteShort(offset, _physicalStateObj); // reset password offset
-                WriteShort(0, _physicalStateObj);
+                WriteShort(encryptedChangePasswordLengthInBytes / 2, _physicalStateObj);
 
                 WriteInt(0, _physicalStateObj);        // reserved for chSSPI
 
@@ -6147,6 +6469,11 @@ namespace System.Data.SqlClient
                 {
                     WriteString(userName, _physicalStateObj);
 
+                    if (rec.credential != null)
+                    {
+                        _physicalStateObj.WriteSecureString(rec.credential.Password);
+                    }
+                    else
                     {
                         _physicalStateObj.WriteByteArray(encryptedPassword, encryptedPasswordLengthInBytes, 0);
                     }
@@ -6170,12 +6497,38 @@ namespace System.Data.SqlClient
                     _physicalStateObj.WriteByteArray(outSSPIBuff, (int)outSSPILength, 0);
 
                 WriteString(rec.attachDBFilename, _physicalStateObj);
+                if (!rec.useSSPI)
+                {
+                    if (rec.newSecurePassword != null)
+                    {
+                        _physicalStateObj.WriteSecureString(rec.newSecurePassword);
+                    }
+                    else
+                    {
+                        _physicalStateObj.WriteByteArray(encryptedChangePassword, encryptedChangePasswordLengthInBytes, 0);
+                    }
+                }
+
                 if (useFeatureExt)
                 {
                     if ((requestedFeatures & TdsEnums.FeatureExtension.SessionRecovery) != 0)
                     {
                         length += WriteSessionRecoveryFeatureRequest(recoverySessionData, true);
-                    };
+                    }
+                    if ((requestedFeatures & TdsEnums.FeatureExtension.FedAuth) != 0)
+                    {
+                        Debug.Assert(fedAuthFeatureExtensionData != null, "fedAuthFeatureExtensionData should not null.");
+                        WriteFedAuthFeatureRequest(fedAuthFeatureExtensionData.Value, write: true);
+                    }
+                    if ((requestedFeatures & TdsEnums.FeatureExtension.GlobalTransactions) != 0)
+                    {
+                        WriteGlobalTransactionsFeatureRequest(true);
+                    }
+                    if ((requestedFeatures & TdsEnums.FeatureExtension.UTF8Support) != 0)
+                    {
+                        WriteUTF8SupportFeatureRequest(true);
+                    }
+
                     _physicalStateObj.WriteByte(0xFF); // terminator
                 }
             }
@@ -6191,24 +6544,30 @@ namespace System.Data.SqlClient
                 throw;
             }
 
+            if (rentedSSPIBuff != null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedSSPIBuff, clearArray: true);
+            }
+
             _physicalStateObj.WritePacket(TdsEnums.HARDFLUSH);
+            _physicalStateObj.ResetSecurePasswordsInformation();
             _physicalStateObj._pendingData = true;
             _physicalStateObj._messageStatus = 0;
         }// tdsLogin
 
-        private void SSPIData(byte[] receivedBuff, UInt32 receivedLength, byte[] sendBuff, ref UInt32 sendLength)
+        private void SSPIData(byte[] receivedBuff, uint receivedLength, ref byte[] sendBuff, ref uint sendLength)
         {
-            SNISSPIData(receivedBuff, receivedLength, sendBuff, ref sendLength);
+            SNISSPIData(receivedBuff, receivedLength, ref sendBuff, ref sendLength);
         }
 
 
-        private void SNISSPIData(byte[] receivedBuff, UInt32 receivedLength, byte[] sendBuff, ref UInt32 sendLength)
+        private void SNISSPIData(byte[] receivedBuff, uint receivedLength, ref byte[] sendBuff, ref uint sendLength)
         {
             if (TdsParserStateObjectFactory.UseManagedSNI)
             {
                 try
                 {
-                    _physicalStateObj.GenerateSspiClientContext(receivedBuff, receivedLength, sendBuff, ref sendLength, _sniSpnBuffer);
+                    _physicalStateObj.GenerateSspiClientContext(receivedBuff, receivedLength, ref sendBuff, ref sendLength, _sniSpnBuffer);
                 }
                 catch (Exception e)
                 {
@@ -6216,7 +6575,7 @@ namespace System.Data.SqlClient
                 }
             }
             else
-            { 
+            {
                 if (receivedBuff == null)
                 {
                     // if we do not have SSPI data coming from server, send over 0's for pointer and length
@@ -6224,7 +6583,7 @@ namespace System.Data.SqlClient
                 }
 
                 // we need to respond to the server's message with SSPI data
-                if (0 != _physicalStateObj.GenerateSspiClientContext(receivedBuff, receivedLength, sendBuff, ref sendLength, _sniSpnBuffer))
+                if (0 != _physicalStateObj.GenerateSspiClientContext(receivedBuff, receivedLength, ref sendBuff, ref sendLength, _sniSpnBuffer))
                 {
                     SSPIError(SQLMessage.SSPIGenerateError(), TdsEnums.GEN_CLIENT_CONTEXT);
                 }
@@ -6240,19 +6599,23 @@ namespace System.Data.SqlClient
 
             // read SSPI data received from server
             Debug.Assert(_physicalStateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
-            bool result = _physicalStateObj.TryReadByteArray(receivedBuff, 0, receivedLength);
-            if (!result) { throw SQL.SynchronousCallMayNotPend(); }
+            bool result = _physicalStateObj.TryReadByteArray(receivedBuff, receivedLength);
+            if (!result)
+            { throw SQL.SynchronousCallMayNotPend(); }
 
             // allocate send buffer and initialize length
-            byte[] sendBuff = new byte[s_maxSSPILength];
-            UInt32 sendLength = s_maxSSPILength;
+            byte[] rentedSendBuff = ArrayPool<byte>.Shared.Rent((int)s_maxSSPILength);
+            byte[] sendBuff = rentedSendBuff;
+            uint sendLength = s_maxSSPILength;
 
             // make call for SSPI data
 
-            SSPIData(receivedBuff, (UInt32)receivedLength, sendBuff, ref sendLength);
+            SSPIData(receivedBuff, (uint)receivedLength, ref sendBuff, ref sendLength);
 
             // DO NOT SEND LENGTH - TDS DOC INCORRECT!  JUST SEND SSPI DATA!
             _physicalStateObj.WriteByteArray(sendBuff, (int)sendLength, 0);
+
+            ArrayPool<byte>.Shared.Return(rentedSendBuff, clearArray: true);
 
             // set message type so server knows its a SSPI response
             _physicalStateObj._outputMessageType = TdsEnums.MT_SSPI;
@@ -6271,8 +6634,62 @@ namespace System.Data.SqlClient
             ThrowExceptionAndWarning(_physicalStateObj);
         }
 
-        
+        internal byte[] GetDTCAddress(int timeout, TdsParserStateObject stateObj)
+        {
+            // If this fails, the server will return a server error - Sameet Agarwal confirmed.
+            // Success: DTCAddress returned.  Failure: SqlError returned.
 
+            byte[] dtcAddr = null;
+
+            using (SqlDataReader dtcReader = TdsExecuteTransactionManagerRequest(
+                                                        null,
+                                                        TdsEnums.TransactionManagerRequestType.GetDTCAddress,
+                                                        null,
+                                                        TdsEnums.TransactionManagerIsolationLevel.Unspecified,
+                                                        timeout, null, stateObj, true))
+            {
+
+                Debug.Assert(SniContext.Snix_Read == stateObj.SniContext, $"The SniContext should be Snix_Read but it actually is {stateObj.SniContext}");
+                if (null != dtcReader && dtcReader.Read())
+                {
+                    Debug.Assert(dtcReader.GetName(0) == "TM Address", "TdsParser: GetDTCAddress did not return 'TM Address'");
+
+                    // DTCAddress is of variable size, and does not have a maximum.  So we call GetBytes
+                    // to get the length of the dtcAddress, then allocate a byte array of that length,
+                    // then call GetBytes again on that byte[] with the length
+                    long dtcLength = dtcReader.GetBytes(0, 0, null, 0, 0);
+
+                    //
+                    if (dtcLength <= int.MaxValue)
+                    {
+                        int cb = (int)dtcLength;
+
+                        dtcAddr = new byte[cb];
+                        dtcReader.GetBytes(0, 0, dtcAddr, 0, cb);
+                    }
+#if DEBUG
+                    else
+                    {
+                        Debug.Fail("unexpected length (> Int32.MaxValue) returned from dtcReader.GetBytes");
+                        // if we hit this case we'll just return a null address so that the user
+                        // will get a transcaction enlistment error in the upper layers
+                    }
+#endif
+                }
+            }
+            return dtcAddr;
+        }
+
+        // Propagate the dtc cookie to the server, enlisting the connection.
+        internal void PropagateDistributedTransaction(byte[] buffer, int timeout, TdsParserStateObject stateObj)
+        {
+            // if this fails, the server will return a server error - Sameet Agarwal confirmed
+            // Success: server will return done token.  Failure: SqlError returned.
+
+            TdsExecuteTransactionManagerRequest(buffer,
+                TdsEnums.TransactionManagerRequestType.Propagate, null,
+                TdsEnums.TransactionManagerIsolationLevel.Unspecified, timeout, null, stateObj, true);
+        }
 
         internal SqlDataReader TdsExecuteTransactionManagerRequest(
                     byte[] buffer,
@@ -6281,7 +6698,8 @@ namespace System.Data.SqlClient
                     TdsEnums.TransactionManagerIsolationLevel isoLevel,
                     int timeout,
                     SqlInternalTransaction transaction,
-                    TdsParserStateObject stateObj
+                    TdsParserStateObject stateObj,
+                    bool isDelegateControlRequest
         )
         {
             Debug.Assert(this == stateObj.Parser, "different parsers");
@@ -6296,7 +6714,7 @@ namespace System.Data.SqlClient
             // set, so we need to handle them by using a different MARS session, 
             // otherwise we'll write on the physical state objects while someone
             // else is using it.  When we don't have MARS enabled, we need to 
-            // lock the physical state object to synchronize it's use at least 
+            // lock the physical state object to synchronize its use at least
             // until we increment the open results count.  Once it's been 
             // incremented the delegated transaction requests will fail, so they
             // won't stomp on anything.
@@ -6316,6 +6734,12 @@ namespace System.Data.SqlClient
                 // Temporarily disable async writes
                 _asyncWrite = false;
 
+                // This validation step MUST be done after locking the connection to guarantee we don't 
+                //  accidentally execute after the transaction has completed on a different thread.
+                if (!isDelegateControlRequest)
+                {
+                    _connHandler.CheckEnlistedTransactionBinding();
+                }
 
                 stateObj._outputMessageType = TdsEnums.MT_TRANS;       // set message type
                 stateObj.SetTimeoutSeconds(timeout);
@@ -6333,8 +6757,26 @@ namespace System.Data.SqlClient
 
                 WriteShort((short)request, stateObj); // write TransactionManager Request type
 
+                bool returnReader = false;
+
                 switch (request)
                 {
+                    case TdsEnums.TransactionManagerRequestType.GetDTCAddress:
+                        WriteShort(0, stateObj);
+
+                        returnReader = true;
+                        break;
+                    case TdsEnums.TransactionManagerRequestType.Propagate:
+                        if (null != buffer)
+                        {
+                            WriteShort(buffer.Length, stateObj);
+                            stateObj.WriteByteArray(buffer, buffer.Length, 0);
+                        }
+                        else
+                        {
+                            WriteShort(0, stateObj);
+                        }
+                        break;
                     case TdsEnums.TransactionManagerRequestType.Begin:
                         Debug.Assert(null != transaction, "Should have specified an internalTransaction when doing a BeginTransaction request!");
 
@@ -6362,6 +6804,11 @@ namespace System.Data.SqlClient
 
                         stateObj.WriteByte((byte)(transactionName.Length * 2)); // Write number of bytes (unicode string).
                         WriteString(transactionName, stateObj);
+                        break;
+                    case TdsEnums.TransactionManagerRequestType.Promote:
+                        // No payload - except current transaction in header
+                        // Promote returns a DTC cookie.  However, the transaction cookie we use for the
+                        // connection does not change after a promote.
                         break;
                     case TdsEnums.TransactionManagerRequestType.Commit:
 
@@ -6391,7 +6838,7 @@ namespace System.Data.SqlClient
                         WriteString(transactionName, stateObj);
                         break;
                     default:
-                        Debug.Assert(false, "Unexpected TransactionManagerRequest");
+                        Debug.Fail("Unexpected TransactionManagerRequest");
                         break;
                 }
 
@@ -6400,10 +6847,33 @@ namespace System.Data.SqlClient
                 stateObj._pendingData = true;
                 stateObj._messageStatus = 0;
 
+                SqlDataReader dtcReader = null;
                 stateObj.SniContext = SniContext.Snix_Read;
-                Run(RunBehavior.UntilDone, null, null, null, stateObj);
+                if (returnReader)
+                {
+                    dtcReader = new SqlDataReader(null, CommandBehavior.Default);
+                    Debug.Assert(this == stateObj.Parser, "different parser");
+#if DEBUG
+                    // Remove the current owner of stateObj - otherwise we will hit asserts
+                    stateObj.Owner = null;
+#endif
+                    dtcReader.Bind(stateObj);
 
-                return null;
+                    // force consumption of metadata
+                    _SqlMetaDataSet metaData = dtcReader.MetaData;
+                }
+                else
+                {
+                    Run(RunBehavior.UntilDone, null, null, null, stateObj);
+                }
+
+                // If the retained ID is no longer valid (because we are enlisting in null or a new transaction) then it should be cleared
+                if (((request == TdsEnums.TransactionManagerRequestType.Begin) || (request == TdsEnums.TransactionManagerRequestType.Propagate)) && ((transaction == null) || (transaction.TransactionId != _retainedTransactionId)))
+                {
+                    _retainedTransactionId = SqlInternalTransaction.NullTransactionId;
+                }
+
+                return dtcReader;
             }
             catch (Exception e)
             {
@@ -6469,7 +6939,7 @@ namespace System.Data.SqlClient
             }
         }
 
-        internal Task TdsExecuteSQLBatch(string text, int timeout, TdsParserStateObject stateObj, bool sync, bool callerHasConnectionLock = false)
+        internal Task TdsExecuteSQLBatch(string text, int timeout, SqlNotificationRequest notificationRequest, TdsParserStateObject stateObj, bool sync, bool callerHasConnectionLock = false)
         {
             if (TdsParserState.Broken == State || TdsParserState.Closed == State)
             {
@@ -6515,11 +6985,14 @@ namespace System.Data.SqlClient
                     throw ADP.ClosedConnectionError();
                 }
 
+                // This validation step MUST be done after locking the connection to guarantee we don't 
+                //  accidentally execute after the transaction has completed on a different thread.
+                _connHandler.CheckEnlistedTransactionBinding();
 
                 stateObj.SetTimeoutSeconds(timeout);
                 stateObj.SniContext = SniContext.Snix_Execute;
 
-                WriteRPCBatchHeaders(stateObj);
+                WriteRPCBatchHeaders(stateObj, notificationRequest);
 
                 stateObj._outputMessageType = TdsEnums.MT_SQL;
 
@@ -6537,29 +7010,34 @@ namespace System.Data.SqlClient
                     // Need to wait for flush - continuation will unlock the connection                    
                     bool taskReleaseConnectionLock = releaseConnectionLock;
                     releaseConnectionLock = false;
-                    return executeTask.ContinueWith(t =>
-                    {
-                        Debug.Assert(!t.IsCanceled, "Task should not be canceled");
-                        try
+                    return executeTask.ContinueWith(
+                        (task, state) =>
                         {
-                            if (t.IsFaulted)
+                            Debug.Assert(!task.IsCanceled, "Task should not be canceled");
+                            var parameters = (Tuple<TdsParser, TdsParserStateObject, SqlInternalConnectionTds>)state;
+                            TdsParser parser = parameters.Item1;
+                            TdsParserStateObject tdsParserStateObject = parameters.Item2;
+                            SqlInternalConnectionTds internalConnectionTds = parameters.Item3;
+                            try
                             {
-                                FailureCleanup(stateObj, t.Exception.InnerException);
-                                throw t.Exception.InnerException;
+                                if (task.IsFaulted)
+                                {
+                                    parser.FailureCleanup(tdsParserStateObject, task.Exception.InnerException);
+                                    throw task.Exception.InnerException;
+                                }
+                                else
+                                {
+                                    tdsParserStateObject.SniContext = SniContext.Snix_Read;
+                                }
                             }
-                            else
+                            finally
                             {
-                                stateObj.SniContext = SniContext.Snix_Read;
+                                internalConnectionTds?._parserLock.Release();
                             }
-                        }
-                        finally
-                        {
-                            if (taskReleaseConnectionLock)
-                            {
-                                _connHandler._parserLock.Release();
-                            }
-                        }
-                    }, TaskScheduler.Default);
+                        },
+                        Tuple.Create(this, stateObj, taskReleaseConnectionLock ? _connHandler : null),
+                        TaskScheduler.Default
+                    );
                 }
 
                 // Finished sync
@@ -6585,8 +7063,8 @@ namespace System.Data.SqlClient
             }
         }
 
-        internal Task TdsExecuteRPC(_SqlRPC[] rpcArray, int timeout, bool inSchema, TdsParserStateObject stateObj, bool isCommandProc, bool sync = true,
-          TaskCompletionSource<object> completion = null, int startRpc = 0, int startParam = 0)
+        internal Task TdsExecuteRPC(_SqlRPC[] rpcArray, int timeout, bool inSchema, SqlNotificationRequest notificationRequest, TdsParserStateObject stateObj, bool isCommandProc, bool sync = true,
+                  TaskCompletionSource<object> completion = null, int startRpc = 0, int startParam = 0)
         {
             bool firstCall = (completion == null);
             bool releaseConnectionLock = false;
@@ -6605,7 +7083,7 @@ namespace System.Data.SqlClient
                 // set, so we need to handle them by using a different MARS session, 
                 // otherwise we'll write on the physical state objects while someone
                 // else is using it.  When we don't have MARS enabled, we need to 
-                // lock the physical state object to synchronize it's use at least 
+                // lock the physical state object to synchronize its use at least
                 // until we increment the open results count.  Once it's been 
                 // incremented the delegated transaction requests will fail, so they
                 // won't stomp on anything.
@@ -6630,11 +7108,16 @@ namespace System.Data.SqlClient
                     {
                         _asyncWrite = !sync;
 
+                        _connHandler.CheckEnlistedTransactionBinding();
 
                         stateObj.SetTimeoutSeconds(timeout);
+
                         stateObj.SniContext = SniContext.Snix_Execute;
 
-                        WriteRPCBatchHeaders(stateObj);
+                        if (_isYukon)
+                        {
+                            WriteRPCBatchHeaders(stateObj, notificationRequest);
+                        }
 
                         stateObj._outputMessageType = TdsEnums.MT_RPC;
                     }
@@ -6669,14 +7152,13 @@ namespace System.Data.SqlClient
 
                         for (int i = (ii == startRpc) ? startParam : 0; i < parameters.Length; i++)
                         {
-                            //                Debug.WriteLine("i:  " + i.ToString(CultureInfo.InvariantCulture));
                             // parameters can be unnamed
                             SqlParameter param = parameters[i];
                             // Since we are reusing the parameters array, we cannot rely on length to indicate no of parameters.
                             if (param == null)
                                 break;      // End of parameters for this execute
 
-                            // Validate parameters are not variable length without size and with null value. 
+                            // Validate parameters are not variable length without size and with null value.
                             param.Validate(i, isCommandProc);
 
                             // type (parameter record stores the MetaType class which is a helper that encapsulates all the type information we need here)
@@ -6688,8 +7170,8 @@ namespace System.Data.SqlClient
                                 continue;
                             }
 
-                            if (
-                              (!_isKatmai && !mt.Is90Supported))
+                            if ((!_isYukon && !mt.Is80Supported) ||
+                                (!_isKatmai && !mt.Is90Supported))
                             {
                                 throw ADP.VersionDoesNotSupportDataType(mt.TypeName);
                             }
@@ -6720,129 +7202,27 @@ namespace System.Data.SqlClient
                             // Write parameter status
                             stateObj.WriteByte(rpcext.paramoptions[i]);
 
-                            //
-                            // fixup the types by using the NullableType property of the MetaType class
-                            //
-                            // following rules should be followed based on feedback from the M-SQL team
-                            // 1) always use the BIG* types (ex: instead of SQLCHAR use SQLBIGCHAR)
-                            // 2) always use nullable types (ex: instead of SQLINT use SQLINTN)
-                            // 3) DECIMALN should always be sent as NUMERICN
-                            //
-                            stateObj.WriteByte(mt.NullableType);
-
-                            // handle variants here: the SQLVariant writing routine will write the maxlen and actual len columns
-                            if (mt.TDSType == TdsEnums.SQLVARIANT)
-                            {
-                                // devnote: Do we ever hit this codepath? Yes, when a null value is being written out via a sql variant
-                                // param.GetActualSize is not used
-                                WriteSqlVariantValue(isSqlVal ? MetaType.GetComValueFromSqlVariant(value) : value, param.GetActualSize(), param.Offset, stateObj);
-                                continue;
-                            }
-
                             // MaxLen field is only written out for non-fixed length data types
                             // use the greater of the two sizes for maxLen
                             int actualSize;
                             int size = mt.IsSizeInCharacters ? param.GetParameterSize() * 2 : param.GetParameterSize();
 
-                            //for UDTs, we calculate the length later when we get the bytes. This is a really expensive operation
+                            // for UDTs, we calculate the length later when we get the bytes. This is a really expensive operation
                             if (mt.TDSType != TdsEnums.SQLUDT)
                                 // getting the actualSize is expensive, cache here and use below
                                 actualSize = param.GetActualSize();
                             else
                                 actualSize = 0; //get this later
 
-                            int codePageByteSize = 0;
-                            int maxsize = 0;
-
-                            if (mt.IsAnsiType)
-                            {
-                                // Avoid the following code block if ANSI but unfilled LazyMat blob
-                                if ((!isNull) && (!isDataFeed))
-                                {
-                                    string s;
-
-                                    if (isSqlVal)
-                                    {
-                                        if (value is SqlString)
-                                        {
-                                            s = ((SqlString)value).Value;
-                                        }
-                                        else
-                                        {
-                                            Debug.Assert(value is SqlChars, "Unknown value for Ansi datatype");
-                                            s = new String(((SqlChars)value).Value);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        s = (string)value;
-                                    }
-
-                                    codePageByteSize = GetEncodingCharLength(s, actualSize, param.Offset, _defaultEncoding);
-                                }
-
-                                if (mt.IsPlp)
-                                {
-                                    WriteShort(TdsEnums.SQL_USHORTVARMAXLEN, stateObj);
-                                }
-                                else
-                                {
-                                    maxsize = (size > codePageByteSize) ? size : codePageByteSize;
-                                    if (maxsize == 0)
-                                    {
-                                        // Yukon doesn't like 0 as MaxSize. Change it to 2 for unicode types (SQL9 - 682322)
-                                        if (mt.IsNCharType)
-                                            maxsize = 2;
-                                        else
-                                            maxsize = 1;
-                                    }
-
-                                    WriteParameterVarLen(mt, maxsize, false/*IsNull*/, stateObj);
-                                }
-                            }
-                            else
-                            {
-                                // If type timestamp - treat as fixed type and always send over timestamp length, which is 8.
-                                // For fixed types, we either send null or fixed length for type length.  We want to match that
-                                // behavior for timestamps.  However, in the case of null, we still must send 8 because if we
-                                // send null we will not receive a output val.  You can send null for fixed types and still
-                                // receive a output value, but not for variable types.  So, always send 8 for timestamp because
-                                // while the user sees it as a fixed type, we are actually representing it as a bigbinary which
-                                // is variable.
-                                if (mt.SqlDbType == SqlDbType.Timestamp)
-                                {
-                                    WriteParameterVarLen(mt, TdsEnums.TEXT_TIME_STAMP_LEN, false, stateObj);
-                                }
-                                else if (mt.SqlDbType == SqlDbType.Udt)
-                                {
-                                    throw ADP.DbTypeNotSupported(SqlDbType.Udt.ToString());
-                                }
-                                else if (mt.IsPlp)
-                                {
-                                    if (mt.SqlDbType != SqlDbType.Xml)
-                                        WriteShort(TdsEnums.SQL_USHORTVARMAXLEN, stateObj);
-                                }
-                                else if ((!mt.IsVarTime) && (mt.SqlDbType != SqlDbType.Date))
-                                {   // Time, Date, DateTime2, DateTimeoffset do not have the size written out
-                                    maxsize = (size > actualSize) ? size : actualSize;
-                                    if (maxsize == 0)
-                                    {
-                                        // Yukon doesn't like 0 as MaxSize. Change it to 2 for unicode types (SQL9 - 682322)
-                                        if (mt.IsNCharType)
-                                            maxsize = 2;
-                                        else
-                                            maxsize = 1;
-                                    }
-
-                                    WriteParameterVarLen(mt, maxsize, false/*IsNull*/, stateObj);
-                                }
-                            }
+                            byte precision = 0;
+                            byte scale = 0;
 
                             // scale and precision are only relevant for numeric and decimal types
+                            // adjust the actual value scale and precision to match the user specified
                             if (mt.SqlDbType == SqlDbType.Decimal)
                             {
-                                byte precision = param.GetActualPrecision();
-                                byte scale = param.GetActualScale();
+                                precision = param.GetActualPrecision();
+                                scale = param.GetActualScale();
 
                                 if (precision > TdsEnums.MAX_NUMERIC_PRECISION)
                                 {
@@ -6867,27 +7247,193 @@ namespace System.Data.SqlClient
                                     }
                                     else
                                     {
-                                        value = AdjustDecimalScale((Decimal)value, scale);
+                                        value = AdjustDecimalScale((decimal)value, scale);
 
-                                        SqlDecimal sqlValue = new SqlDecimal((Decimal)value);
+                                        SqlDecimal sqlValue = new SqlDecimal((decimal)value);
 
                                         // If Precision is specified, verify value precision vs param precision
                                         if (precision != 0)
                                         {
                                             if (precision < sqlValue.Precision)
                                             {
-                                                throw ADP.ParameterValueOutOfRange((Decimal)value);
+                                                throw ADP.ParameterValueOutOfRange((decimal)value);
                                             }
                                         }
                                     }
                                 }
+                            }
 
+                            // fixup the types by using the NullableType property of the MetaType class
+                            //
+                            // following rules should be followed based on feedback from the M-SQL team
+                            // 1) always use the BIG* types (ex: instead of SQLCHAR use SQLBIGCHAR)
+                            // 2) always use nullable types (ex: instead of SQLINT use SQLINTN)
+                            // 3) DECIMALN should always be sent as NUMERICN
+                            //
+                            stateObj.WriteByte(mt.NullableType);
+
+                            // handle variants here: the SQLVariant writing routine will write the maxlen and actual len columns
+                            if (mt.TDSType == TdsEnums.SQLVARIANT)
+                            {
+                                // devnote: Do we ever hit this codepath? Yes, when a null value is being written out via a sql variant
+                                // param.GetActualSize is not used
+                                WriteSqlVariantValue(isSqlVal ? MetaType.GetComValueFromSqlVariant(value) : value, param.GetActualSize(), param.Offset, stateObj);
+                                continue;
+                            }
+
+                            int codePageByteSize = 0;
+                            int maxsize = 0;
+
+                            if (mt.IsAnsiType)
+                            {
+                                // Avoid the following code block if ANSI but unfilled LazyMat blob
+                                if ((!isNull) && (!isDataFeed))
+                                {
+                                    string s;
+
+                                    if (isSqlVal)
+                                    {
+                                        if (value is SqlString)
+                                        {
+                                            s = ((SqlString)value).Value;
+                                        }
+                                        else
+                                        {
+                                            Debug.Assert(value is SqlChars, "Unknown value for Ansi datatype");
+                                            s = new string(((SqlChars)value).Value);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        s = (string)value;
+                                    }
+
+                                    codePageByteSize = GetEncodingCharLength(s, actualSize, param.Offset, _defaultEncoding);
+                                }
+
+                                if (mt.IsPlp)
+                                {
+                                    WriteShort(TdsEnums.SQL_USHORTVARMAXLEN, stateObj);
+                                }
+                                else
+                                {
+                                    maxsize = (size > codePageByteSize) ? size : codePageByteSize;
+                                    if (maxsize == 0)
+                                    {
+                                        // Yukon doesn't like 0 as MaxSize. Change it to 2 for unicode types
+                                        if (mt.IsNCharType)
+                                            maxsize = 2;
+                                        else
+                                            maxsize = 1;
+                                    }
+
+                                    WriteParameterVarLen(mt, maxsize, false /*IsNull*/, stateObj);
+                                }
+                            }
+                            else
+                            {
+                                // If type timestamp - treat as fixed type and always send over timestamp length, which is 8.
+                                // For fixed types, we either send null or fixed length for type length.  We want to match that
+                                // behavior for timestamps.  However, in the case of null, we still must send 8 because if we
+                                // send null we will not receive a output val.  You can send null for fixed types and still
+                                // receive a output value, but not for variable types.  So, always send 8 for timestamp because
+                                // while the user sees it as a fixed type, we are actually representing it as a bigbinary which
+                                // is variable.
+                                if (mt.SqlDbType == SqlDbType.Timestamp)
+                                {
+                                    WriteParameterVarLen(mt, TdsEnums.TEXT_TIME_STAMP_LEN, false, stateObj);
+                                }
+                                else if (mt.SqlDbType == SqlDbType.Udt)
+                                {
+                                    byte[] udtVal = null;
+                                    Format format = Format.Native;
+
+                                    Debug.Assert(_isYukon, "Invalid DataType UDT for non-Yukon or later server!");
+
+                                    if (!isNull)
+                                    {
+                                        udtVal = _connHandler.Connection.GetBytes(value, out format, out maxsize);
+
+                                        Debug.Assert(null != udtVal, "GetBytes returned null instance. Make sure that it always returns non-null value");
+                                        size = udtVal.Length;
+
+                                        //it may be legitimate, but we dont support it yet
+                                        if (size < 0 || (size >= ushort.MaxValue && maxsize != -1))
+                                            throw new IndexOutOfRangeException();
+                                    }
+
+                                    //if this is NULL value, write special null value
+                                    byte[] lenBytes = BitConverter.GetBytes((long)size);
+
+                                    if (string.IsNullOrEmpty(param.UdtTypeName))
+                                        throw SQL.MustSetUdtTypeNameForUdtParams();
+
+                                    // Split the input name. TypeName is returned as single 3 part name during DeriveParameters.
+                                    // NOTE: ParseUdtTypeName throws if format is incorrect
+                                    string[] names = SqlParameter.ParseTypeName(param.UdtTypeName, true /* is UdtTypeName */);
+                                    if (!string.IsNullOrEmpty(names[0]) && TdsEnums.MAX_SERVERNAME < names[0].Length)
+                                    {
+                                        throw ADP.ArgumentOutOfRange(nameof(names));
+                                    }
+                                    if (!string.IsNullOrEmpty(names[1]) && TdsEnums.MAX_SERVERNAME < names[names.Length - 2].Length)
+                                    {
+                                        throw ADP.ArgumentOutOfRange(nameof(names));
+                                    }
+                                    if (TdsEnums.MAX_SERVERNAME < names[2].Length)
+                                    {
+                                        throw ADP.ArgumentOutOfRange(nameof(names));
+                                    }
+
+                                    WriteUDTMetaData(value, names[0], names[1], names[2], stateObj);
+
+                                    if (!isNull)
+                                    {
+                                        WriteUnsignedLong((ulong)udtVal.Length, stateObj); // PLP length
+                                        if (udtVal.Length > 0)
+                                        { // Only write chunk length if its value is greater than 0
+                                            WriteInt(udtVal.Length, stateObj); // Chunk length
+                                            stateObj.WriteByteArray(udtVal, udtVal.Length, 0); // Value
+                                        }
+                                        WriteInt(0, stateObj); // Terminator
+                                    }
+                                    else
+                                    {
+                                        WriteUnsignedLong(TdsEnums.SQL_PLP_NULL, stateObj); // PLP Null.
+                                    }
+                                    continue; // End of UDT - continue to next parameter.
+                                }
+                                else if (mt.IsPlp)
+                                {
+                                    if (mt.SqlDbType != SqlDbType.Xml)
+                                        WriteShort(TdsEnums.SQL_USHORTVARMAXLEN, stateObj);
+                                }
+                                else if ((!mt.IsVarTime) && (mt.SqlDbType != SqlDbType.Date))
+                                {   // Time, Date, DateTime2, DateTimeoffset do not have the size written out
+                                    maxsize = (size > actualSize) ? size : actualSize;
+                                    if (maxsize == 0 && _isYukon)
+                                    {
+                                        // Yukon doesn't like 0 as MaxSize. Change it to 2 for unicode types (SQL9 - 682322)
+                                        if (mt.IsNCharType)
+                                            maxsize = 2;
+                                        else
+                                            maxsize = 1;
+                                    }
+
+                                    WriteParameterVarLen(mt, maxsize, false /*IsNull*/, stateObj);
+                                }
+                            }
+
+                            // scale and precision are only relevant for numeric and decimal types
+                            if (mt.SqlDbType == SqlDbType.Decimal)
+                            {
                                 if (0 == precision)
                                 {
                                     stateObj.WriteByte(TdsEnums.DEFAULT_NUMERIC_PRECISION);
                                 }
                                 else
+                                {
                                     stateObj.WriteByte(precision);
+                                }
 
                                 stateObj.WriteByte(scale);
                             }
@@ -6898,13 +7444,13 @@ namespace System.Data.SqlClient
 
                             // write out collation or xml metadata
 
-                            if (mt.SqlDbType == SqlDbType.Xml)
+                            if (_isYukon && (mt.SqlDbType == SqlDbType.Xml))
                             {
                                 if (((param.XmlSchemaCollectionDatabase != null) && (param.XmlSchemaCollectionDatabase != ADP.StrEmpty)) ||
                                     ((param.XmlSchemaCollectionOwningSchema != null) && (param.XmlSchemaCollectionOwningSchema != ADP.StrEmpty)) ||
                                     ((param.XmlSchemaCollectionName != null) && (param.XmlSchemaCollectionName != ADP.StrEmpty)))
                                 {
-                                    stateObj.WriteByte(1);   //Schema present flag
+                                    stateObj.WriteByte(1);  //Schema present flag
 
                                     if ((param.XmlSchemaCollectionDatabase != null) && (param.XmlSchemaCollectionDatabase != ADP.StrEmpty))
                                     {
@@ -6927,6 +7473,7 @@ namespace System.Data.SqlClient
                                     {
                                         stateObj.WriteByte(0);      // no xml schema name
                                     }
+
                                     if ((param.XmlSchemaCollectionName != null) && (param.XmlSchemaCollectionName != ADP.StrEmpty))
                                     {
                                         tempLen = (param.XmlSchemaCollectionName).Length;
@@ -6990,19 +7537,28 @@ namespace System.Data.SqlClient
                                         task = completion.Task;
                                     }
 
-                                    AsyncHelper.ContinueTask(writeParamTask, completion,
-                                      () => TdsExecuteRPC(rpcArray, timeout, inSchema, stateObj, isCommandProc, sync, completion,
-                                                            startRpc: ii, startParam: i + 1),
-                                        connectionToDoom: _connHandler,
-                                        onFailure: exc => TdsExecuteRPC_OnFailure(exc, stateObj));
+                                    TDSExecuteRPCParameterSetupWriteCompletion(
+                                        rpcArray,
+                                        timeout,
+                                        inSchema,
+                                        notificationRequest,
+                                        stateObj,
+                                        isCommandProc,
+                                        sync,
+                                        completion,
+                                        ii,
+                                        i + 1,
+                                        writeParamTask
+                                    );
 
                                     // Take care of releasing the locks
                                     if (releaseConnectionLock)
                                     {
-                                        task.ContinueWith(_ =>
-                                        {
-                                            _connHandler._parserLock.Release();
-                                        }, TaskScheduler.Default);
+                                        task.ContinueWith(
+                                            (_, state) => ((SqlInternalConnectionTds)state)._parserLock.Release(),
+                                            state: _connHandler,
+                                            TaskScheduler.Default
+                                        );
                                         releaseConnectionLock = false;
                                     }
 
@@ -7020,7 +7576,14 @@ namespace System.Data.SqlClient
                         // If this is not the last RPC we are sending, add the batch flag
                         if (ii < (rpcArray.Length - 1))
                         {
-                            stateObj.WriteByte(TdsEnums.YUKON_RPCBATCHFLAG);
+                            if (_isYukon)
+                            {
+                                stateObj.WriteByte(TdsEnums.YUKON_RPCBATCHFLAG);
+                            }
+                            else
+                            {
+                                stateObj.WriteByte(TdsEnums.SHILOH_RPCBATCHFLAG);
+                            }
                         }
                     } // rpc for loop
 
@@ -7036,10 +7599,9 @@ namespace System.Data.SqlClient
                             task = completion.Task;
                         }
 
-                        bool taskReleaseConnectionLock = releaseConnectionLock;
-                        execFlushTask.ContinueWith(tsk => ExecuteFlushTaskCallback(tsk, stateObj, completion, taskReleaseConnectionLock), TaskScheduler.Default);
+                        TDSExecuteRPCParameterSetupFlushCompletion(stateObj, completion, execFlushTask, releaseConnectionLock);
 
-                        // ExecuteFlushTaskCallback will take care of the locks for us
+                        // TDSExecuteRPCParameterSetupFlushCompletion calling ExecuteFlushTaskCallback will take care of the locks for us
                         releaseConnectionLock = false;
 
                         return task;
@@ -7073,7 +7635,7 @@ namespace System.Data.SqlClient
                 }
                 else
                 {
-                    throw e;
+                    throw;
                 }
             }
             finally
@@ -7084,6 +7646,35 @@ namespace System.Data.SqlClient
                     _connHandler._parserLock.Release();
                 }
             }
+        }
+
+
+        // This is in its own method to avoid always allocating the lambda in TDSExecuteRPCParameter
+        private void TDSExecuteRPCParameterSetupWriteCompletion(_SqlRPC[] rpcArray, int timeout, bool inSchema, SqlNotificationRequest notificationRequest, TdsParserStateObject stateObj, bool isCommandProc, bool sync, TaskCompletionSource<object> completion, int startRpc, int startParam, Task writeParamTask)
+        {
+            AsyncHelper.ContinueTask(
+                writeParamTask,
+                completion,
+                () => TdsExecuteRPC(
+                        rpcArray,
+                        timeout,
+                        inSchema,
+                        notificationRequest,
+                        stateObj,
+                        isCommandProc,
+                        sync,
+                        completion,
+                        startRpc,
+                        startParam
+                      ),
+                onFailure: exc => TdsExecuteRPC_OnFailure(exc, stateObj)
+            );
+        }
+
+        // This is in its own method to avoid always allocating the lambda in  TDSExecuteRPCParameter 
+        private void TDSExecuteRPCParameterSetupFlushCompletion(TdsParserStateObject stateObj, TaskCompletionSource<object> completion, Task execFlushTask, bool taskReleaseConnectionLock)
+        {
+            execFlushTask.ContinueWith(tsk => ExecuteFlushTaskCallback(tsk, stateObj, completion, taskReleaseConnectionLock), TaskScheduler.Default);
         }
 
         private void FinalizeExecuteRPC(TdsParserStateObject stateObj)
@@ -7147,7 +7738,6 @@ namespace System.Data.SqlClient
             }
         }
 
-        private static readonly IEnumerable<MSS.SqlDataRecord> s_tvpEmptyValue = new MSS.SqlDataRecord[0];
         private void WriteSmiParameter(SqlParameter param, int paramIndex, bool sendDefault, TdsParserStateObject stateObj)
         {
             //
@@ -7174,7 +7764,7 @@ namespace System.Data.SqlClient
                 // Value for TVP default is empty list, not NULL
                 if (SqlDbType.Structured == metaData.SqlDbType && metaData.IsMultiValued)
                 {
-                    value = s_tvpEmptyValue;
+                    value = Array.Empty<MSS.SqlDataRecord>();
                     typeCode = MSS.ExtendedClrTypeCode.IEnumerableOfSqlDataRecord;
                 }
                 else
@@ -7195,7 +7785,7 @@ namespace System.Data.SqlClient
             else
             {
                 value = param.GetCoercedValue();
-                typeCode = MSS.MetaDataUtilsSmi.DetermineExtendedTypeCodeForUseWithSqlDbType(metaData.SqlDbType, metaData.IsMultiValued, value);
+                typeCode = MSS.MetaDataUtilsSmi.DetermineExtendedTypeCodeForUseWithSqlDbType(metaData.SqlDbType, metaData.IsMultiValued, value, null);
             }
 
 
@@ -7393,7 +7983,7 @@ namespace System.Data.SqlClient
                     }
                     else
                     {
-                        Debug.Assert(false, "SUDTs not yet supported.");
+                        Debug.Fail("SUDTs not yet supported.");
                     }
                     break;
                 case SqlDbType.Date:
@@ -7412,7 +8002,7 @@ namespace System.Data.SqlClient
                     stateObj.WriteByte(metaData.Scale);
                     break;
                 default:
-                    Debug.Assert(false, "Unknown SqlDbType should have been caught earlier!");
+                    Debug.Fail("Unknown SqlDbType should have been caught earlier!");
                     break;
             }
         }
@@ -7587,9 +8177,9 @@ namespace System.Data.SqlClient
 
                     ushort flags;
 
-                    flags = (ushort)(md.updatability << 2);
-                    flags |= (ushort)(md.isNullable ? (ushort)TdsEnums.Nullable : (ushort)0);
-                    flags |= (ushort)(md.isIdentity ? (ushort)TdsEnums.Identity : (ushort)0);
+                    flags = (ushort)(md.Updatability << 2);
+                    flags |= (ushort)(md.IsNullable ? (ushort)TdsEnums.Nullable : (ushort)0);
+                    flags |= (ushort)(md.IsIdentity ? (ushort)TdsEnums.Identity : (ushort)0);
 
                     WriteShort(flags, stateObj);      // write the flags
 
@@ -7606,7 +8196,9 @@ namespace System.Data.SqlClient
                             stateObj.WriteByteArray(s_xmlMetadataSubstituteSequence, s_xmlMetadataSubstituteSequence.Length, 0);
                             break;
                         case SqlDbType.Udt:
-                            throw ADP.DbTypeNotSupported(SqlDbType.Udt.ToString());
+                            stateObj.WriteByte(TdsEnums.SQLBIGVARBINARY);
+                            WriteTokenLength(TdsEnums.SQLBIGVARBINARY, md.length, stateObj);
+                            break;
                         case SqlDbType.Date:
                             stateObj.WriteByte(md.tdsType);
                             break;
@@ -7663,6 +8255,12 @@ namespace System.Data.SqlClient
                 }
                 if (metadata.collation != null)
                 {
+                    // Replace encoding if it is UTF8
+                    if ((metadata.collation.info & TdsEnums.UTF8_IN_TDSCOLLATION) == TdsEnums.UTF8_IN_TDSCOLLATION)
+                    {
+                        _defaultEncoding = Encoding.UTF8;
+                    }
+
                     _defaultCollation = metadata.collation;
                     _defaultLCID = _defaultCollation.LCID;
                 }
@@ -7863,7 +8461,89 @@ namespace System.Data.SqlClient
             }
         }
 
-        private void WriteRPCBatchHeaders(TdsParserStateObject stateObj)
+        private int GetNotificationHeaderSize(SqlNotificationRequest notificationRequest)
+        {
+            if (null != notificationRequest)
+            {
+                string callbackId = notificationRequest.UserData;
+                string service = notificationRequest.Options;
+                int timeout = notificationRequest.Timeout;
+
+                if (null == callbackId)
+                {
+                    throw ADP.ArgumentNull(nameof(callbackId));
+                }
+                else if (ushort.MaxValue < callbackId.Length)
+                {
+                    throw ADP.ArgumentOutOfRange(nameof(callbackId));
+                }
+
+                if (null == service)
+                {
+                    throw ADP.ArgumentNull(nameof(service));
+                }
+                else if (ushort.MaxValue < service.Length)
+                {
+                    throw ADP.ArgumentOutOfRange(nameof(service));
+                }
+
+                if (-1 > timeout)
+                {
+                    throw ADP.ArgumentOutOfRange(nameof(timeout));
+                }
+
+                // Header Length (uint) (included in size) (already written to output buffer)
+                // Header Type (ushort)
+                // NotifyID Length (ushort)
+                // NotifyID UnicodeStream (unicode text)
+                // SSBDeployment Length (ushort)
+                // SSBDeployment UnicodeStream (unicode text)
+                // Timeout (uint) -- optional
+                // Don't send timeout value if it is 0
+
+                int headerLength = 4 + 2 + 2 + (callbackId.Length * 2) + 2 + (service.Length * 2);
+                if (timeout > 0)
+                    headerLength += 4;
+                return headerLength;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        // Write query notificaiton header data, not including the notificaiton header length
+        private void WriteQueryNotificationHeaderData(SqlNotificationRequest notificationRequest, TdsParserStateObject stateObj)
+        {
+            Debug.Assert(_isYukon, "WriteQueryNotificationHeaderData called on a non-Yukon server");
+
+            // We may need to update the notification header length if the header is changed in the future
+
+            Debug.Assert(null != notificationRequest, "notificaitonRequest is null");
+
+            string callbackId = notificationRequest.UserData;
+            string service = notificationRequest.Options;
+            int timeout = notificationRequest.Timeout;
+
+            // we did verification in GetNotificationHeaderSize, so just assert here.
+            Debug.Assert(null != callbackId, "CallbackId is null");
+            Debug.Assert(ushort.MaxValue >= callbackId.Length, "CallbackId length is out of range");
+            Debug.Assert(null != service, "Service is null");
+            Debug.Assert(ushort.MaxValue >= service.Length, "Service length is out of range");
+            Debug.Assert(-1 <= timeout, "Timeout");
+
+            WriteShort(TdsEnums.HEADERTYPE_QNOTIFICATION, stateObj);      // Query notifications Type
+
+            WriteShort(callbackId.Length * 2, stateObj); // Length in bytes
+            WriteString(callbackId, stateObj);
+
+            WriteShort(service.Length * 2, stateObj); // Length in bytes
+            WriteString(service, stateObj);
+            if (timeout > 0)
+                WriteInt(timeout, stateObj);
+        }
+
+        private void WriteRPCBatchHeaders(TdsParserStateObject stateObj, SqlNotificationRequest notificationRequest)
         {
             /* Header:
                TotalLength  - DWORD  - including all headers and lengths, including itself
@@ -7875,10 +8555,11 @@ namespace System.Data.SqlClient
                }
             */
 
+            int notificationHeaderSize = GetNotificationHeaderSize(notificationRequest);
 
             const int marsHeaderSize = 18; // 4 + 2 + 8 + 4
 
-            int totalHeaderLength = 4 + marsHeaderSize;
+            int totalHeaderLength = 4 + marsHeaderSize + notificationHeaderSize;
             Debug.Assert(stateObj._outBytesUsed == stateObj._outputHeaderLen, "Output bytes written before total header length");
             // Write total header length
             WriteInt(totalHeaderLength, stateObj);
@@ -7887,6 +8568,14 @@ namespace System.Data.SqlClient
             WriteInt(marsHeaderSize, stateObj);
             // Write Mars header data
             WriteMarsHeaderData(stateObj, CurrentTransaction);
+
+            if (0 != notificationHeaderSize)
+            {
+                // Write Notification header length
+                WriteInt(notificationHeaderSize, stateObj);
+                // Write notificaiton header data
+                WriteQueryNotificationHeaderData(notificationRequest, stateObj);
+            }
         }
 
 
@@ -7938,7 +8627,7 @@ namespace System.Data.SqlClient
                         break;
 
                     default:
-                        Debug.Assert(false, "Unknown token length!");
+                        Debug.Fail("Unknown token length!");
                         break;
                 }
 
@@ -7980,9 +8669,9 @@ namespace System.Data.SqlClient
                             return true;
                     }
                 }
-                else if ((currentType == typeof(String)) && (((String)value).Length > 0))
+                else if ((currentType == typeof(string)) && (((String)value).Length > 0))
                 {
-                    if ((value != null) && (((String)value)[0] & 0xff) != 0xff)
+                    if ((value != null) && (((string)value)[0] & 0xff) != 0xff)
                         return true;
                 }
                 else if (currentType == typeof(SqlXml))
@@ -8009,9 +8698,7 @@ namespace System.Data.SqlClient
                 }
                 else
                 {
-                    return AsyncHelper.CreateContinuationTask<int, TdsParserStateObject>(unterminatedWriteTask,
-                        WriteInt, 0, stateObj,
-                        connectionToDoom: _connHandler);
+                    return AsyncHelper.CreateContinuationTask<int, TdsParserStateObject>(unterminatedWriteTask, WriteInt, 0, stateObj);
                 }
             }
             else
@@ -8072,10 +8759,18 @@ namespace System.Data.SqlClient
 
                 case TdsEnums.SQLUNIQUEID:
                     {
-                        byte[] b = ((SqlGuid)value).ToByteArray();
-
-                        Debug.Assert((actualLength == b.Length) && (actualLength == 16), "Invalid length for guid type in com+ object");
-                        stateObj.WriteByteArray(b, actualLength, 0);
+                        Debug.Assert(actualLength == 16, "Invalid length for guid type in com+ object");
+                        Span<byte> b = stackalloc byte[16];
+                        SqlGuid sqlGuid = (SqlGuid)value;
+                        if (sqlGuid.IsNull)
+                        {
+                            b.Clear(); // this is needed because initlocals may be supressed in framework assemblies meaning the memory is not automaticaly zeroed 
+                        }
+                        else
+                        {
+                            FillGuidBytes(sqlGuid.Value, b);
+                        }
+                        stateObj.WriteByteSpan(b);
                         break;
                     }
 
@@ -8116,7 +8811,7 @@ namespace System.Data.SqlClient
                     }
                     if (value is SqlChars)
                     {
-                        String sch = new String(((SqlChars)value).Value);
+                        string sch = new string(((SqlChars)value).Value);
 
                         return WriteEncodingChar(sch, actualLength, offset, _defaultEncoding, stateObj, canAccumulate: false);
                     }
@@ -8191,10 +8886,11 @@ namespace System.Data.SqlClient
                     }
 
                 case TdsEnums.SQLUDT:
-                    throw ADP.DbTypeNotSupported(SqlDbType.Udt.ToString());
+                    Debug.Fail("Called WriteSqlValue on UDT param.Should have already been handled");
+                    throw SQL.UDTUnexpectedResult(value.GetType().AssemblyQualifiedName);
 
                 default:
-                    Debug.Assert(false, "Unknown TdsType!" + type.NullableType.ToString("x2", (IFormatProvider)null));
+                    Debug.Fail("Unknown TdsType!" + type.NullableType.ToString("x2", (IFormatProvider)null));
                     break;
             } // switch
             // return point for accumulated writes, note: non-accumulated writes returned from their case statements
@@ -8393,7 +9089,7 @@ namespace System.Data.SqlClient
                     _next.Write(value);
                     _written++;
                 }
-                Debug.Assert(_size < 0 || _written <= _size, string.Format("Length of data written exceeds specified length.  Written: {0}, specified: {1}", _written, _size));
+                Debug.Assert(_size < 0 || _written <= _size, $"Length of data written exceeds specified length.  Written: {_written}, specified: {_size}");
             }
 
             public override void Write(char[] buffer, int index, int count)
@@ -8664,11 +9360,11 @@ namespace System.Data.SqlClient
             {
                 case TdsEnums.SQLFLTN:
                     if (type.FixedLength == 4)
-                        WriteFloat((Single)value, stateObj);
+                        WriteFloat((float)value, stateObj);
                     else
                     {
                         Debug.Assert(type.FixedLength == 8, "Invalid length for SqlDouble type!");
-                        WriteDouble((Double)value, stateObj);
+                        WriteDouble((double)value, stateObj);
                     }
 
                     break;
@@ -8699,11 +9395,11 @@ namespace System.Data.SqlClient
 
                 case TdsEnums.SQLUNIQUEID:
                     {
-                        System.Guid guid = (System.Guid)value;
-                        byte[] b = guid.ToByteArray();
+                        Debug.Assert(actualLength == 16, "Invalid length for guid type in com+ object");
+                        Span<byte> b = stackalloc byte[16];                        
+                        FillGuidBytes((System.Guid)value, b);
+                        stateObj.WriteByteSpan(b);
 
-                        Debug.Assert((actualLength == b.Length) && (actualLength == 16), "Invalid length for guid type in com+ object");
-                        stateObj.WriteByteArray(b, actualLength, 0);
                         break;
                     }
 
@@ -8818,7 +9514,7 @@ namespace System.Data.SqlClient
                     }
                 case TdsEnums.SQLNUMERICN:
                     Debug.Assert(type.FixedLength <= 17, "Decimal length cannot be greater than 17 bytes");
-                    WriteDecimal((Decimal)value, stateObj);
+                    WriteDecimal((decimal)value, stateObj);
                     break;
 
                 case TdsEnums.SQLDATETIMN:
@@ -8844,7 +9540,7 @@ namespace System.Data.SqlClient
 
                 case TdsEnums.SQLMONEYN:
                     {
-                        WriteCurrency((Decimal)value, type.FixedLength, stateObj);
+                        WriteCurrency((decimal)value, type.FixedLength, stateObj);
                         break;
                     }
 
@@ -8875,7 +9571,7 @@ namespace System.Data.SqlClient
                     break;
 
                 default:
-                    Debug.Assert(false, "Unknown TdsType!" + type.NullableType.ToString("x2", (IFormatProvider)null));
+                    Debug.Fail("Unknown TdsType!" + type.NullableType.ToString("x2", (IFormatProvider)null));
                     break;
             } // switch
             // return point for accumulated writes, note: non-accumulated writes returned from their case statements
@@ -8964,7 +9660,7 @@ namespace System.Data.SqlClient
                         "Out of sync plp read request");
             if (stateObj._longlenleft == 0)
             {
-                Debug.Assert(false, "Out of sync read request");
+                Debug.Fail("Out of sync read request");
                 charsRead = 0;
                 return true;
             }
@@ -8992,7 +9688,8 @@ namespace System.Data.SqlClient
             int charsRead;
             Debug.Assert(stateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
             bool result = TryReadPlpUnicodeChars(ref buff, offst, len, stateObj, out charsRead);
-            if (!result) { throw SQL.SynchronousCallMayNotPend(); }
+            if (!result)
+            { throw SQL.SynchronousCallMayNotPend(); }
             return charsRead;
         }
 
@@ -9186,7 +9883,8 @@ namespace System.Data.SqlClient
             ulong skipped;
             Debug.Assert(stateObj._syncOverAsync, "Should not attempt pends in a synchronous call");
             bool result = TrySkipPlpValue(cb, stateObj, out skipped);
-            if (!result) { throw SQL.SynchronousCallMayNotPend(); }
+            if (!result)
+            { throw SQL.SynchronousCallMayNotPend(); }
             return skipped;
         }
 
@@ -9208,8 +9906,8 @@ namespace System.Data.SqlClient
             while ((totalBytesSkipped < cb) &&
                     (stateObj._longlenleft > 0))
             {
-                if (stateObj._longlenleft > Int32.MaxValue)
-                    bytesSkipped = Int32.MaxValue;
+                if (stateObj._longlenleft > int.MaxValue)
+                    bytesSkipped = int.MaxValue;
                 else
                     bytesSkipped = (int)stateObj._longlenleft;
                 bytesSkipped = ((cb - totalBytesSkipped) < (ulong)bytesSkipped) ? (int)(cb - totalBytesSkipped) : bytesSkipped;
@@ -9285,9 +9983,14 @@ namespace System.Data.SqlClient
             {
                 return false;
             }
+            if (metaData.udt is null)
+            {
+                metaData.udt = new SqlMetaDataUdt();
+            }
+
             if (byteLength != 0)
             {
-                if (!stateObj.TryReadString(byteLength, out metaData.udtDatabaseName))
+                if (!stateObj.TryReadString(byteLength, out metaData.udt.DatabaseName))
                 {
                     return false;
                 }
@@ -9300,7 +10003,7 @@ namespace System.Data.SqlClient
             }
             if (byteLength != 0)
             {
-                if (!stateObj.TryReadString(byteLength, out metaData.udtSchemaName))
+                if (!stateObj.TryReadString(byteLength, out metaData.udt.SchemaName))
                 {
                     return false;
                 }
@@ -9313,7 +10016,7 @@ namespace System.Data.SqlClient
             }
             if (byteLength != 0)
             {
-                if (!stateObj.TryReadString(byteLength, out metaData.udtTypeName))
+                if (!stateObj.TryReadString(byteLength, out metaData.udt.TypeName))
                 {
                     return false;
                 }
@@ -9325,7 +10028,7 @@ namespace System.Data.SqlClient
             }
             if (shortLength != 0)
             {
-                if (!stateObj.TryReadString(shortLength, out metaData.udtAssemblyQualifiedName))
+                if (!stateObj.TryReadString(shortLength, out metaData.udt.AssemblyQualifiedName))
                 {
                     return false;
                 }

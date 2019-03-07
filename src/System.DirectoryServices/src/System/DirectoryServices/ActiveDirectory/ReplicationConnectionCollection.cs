@@ -2,31 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Collections;
-    using System.Globalization;
-
     public class ReplicationConnectionCollection : ReadOnlyCollectionBase
     {
         internal ReplicationConnectionCollection() { }
 
-        public ReplicationConnection this[int index]
-        {
-            get
-            {
-                return (ReplicationConnection)InnerList[index];
-            }
-        }
+        public ReplicationConnection this[int index] => (ReplicationConnection)InnerList[index];
 
         public bool Contains(ReplicationConnection connection)
         {
             if (connection == null)
-                throw new ArgumentNullException("connection");
+                throw new ArgumentNullException(nameof(connection));
 
             if (!connection.existingConnection)
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.ConnectionNotCommitted , connection.Name));
+                throw new InvalidOperationException(SR.Format(SR.ConnectionNotCommitted , connection.Name));
 
             string dn = (string)PropertyManager.GetPropertyValue(connection.context, connection.cachedDirectoryEntry, PropertyManager.DistinguishedName);
 
@@ -46,10 +38,10 @@ namespace System.DirectoryServices.ActiveDirectory
         public int IndexOf(ReplicationConnection connection)
         {
             if (connection == null)
-                throw new ArgumentNullException("connection");
+                throw new ArgumentNullException(nameof(connection));
 
             if (!connection.existingConnection)
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.ConnectionNotCommitted , connection.Name));
+                throw new InvalidOperationException(SR.Format(SR.ConnectionNotCommitted , connection.Name));
 
             string dn = (string)PropertyManager.GetPropertyValue(connection.context, connection.cachedDirectoryEntry, PropertyManager.DistinguishedName);
 
@@ -71,9 +63,6 @@ namespace System.DirectoryServices.ActiveDirectory
             InnerList.CopyTo(connections, index);
         }
 
-        internal int Add(ReplicationConnection value)
-        {
-            return InnerList.Add(value);
-        }
+        internal int Add(ReplicationConnection value) => InnerList.Add(value);
     }
 }

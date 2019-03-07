@@ -17,14 +17,14 @@ namespace System.Linq.Parallel.Tests
         [Fact]
         public static void NullQuery()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).AsParallel());
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable)null).AsParallel());
-            Assert.Throws<ArgumentNullException>("source", () => ((Partitioner<int>)null).AsParallel());
-            Assert.Throws<ArgumentNullException>("source", () => ((int[])null).AsParallel());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).AsParallel());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable)null).AsParallel());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((Partitioner<int>)null).AsParallel());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((int[])null).AsParallel());
 
-            Assert.Throws<ArgumentNullException>("source", () => ParallelEnumerable.AsOrdered((ParallelQuery<int>)null));
-            Assert.Throws<ArgumentNullException>("source", () => ParallelEnumerable.AsOrdered((ParallelQuery)null));
-            Assert.Throws<ArgumentNullException>("source", () => ParallelEnumerable.AsUnordered<int>((ParallelQuery<int>)null));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ParallelEnumerable.AsOrdered((ParallelQuery<int>)null));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ParallelEnumerable.AsOrdered((ParallelQuery)null));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ParallelEnumerable.AsUnordered<int>((ParallelQuery<int>)null));
         }
 
         //
@@ -179,7 +179,8 @@ namespace System.Linq.Parallel.Tests
                     yield return new object[] { element, count };
                     yield return new object[] { (long)element, count };
                     yield return new object[] { (double)element, count };
-                    yield return new object[] { (decimal)element, count };
+                    // [ActiveIssue("https://github.com/xunit/xunit/issues/1771")]
+                    //yield return new object[] { (decimal)element, count };
                     yield return new object[] { "" + element, count };
                 }
                 yield return new object[] { (object)null, count };
@@ -252,7 +253,8 @@ namespace System.Linq.Parallel.Tests
             yield return new object[] { default(int) };
             yield return new object[] { default(long) };
             yield return new object[] { default(double) };
-            yield return new object[] { default(decimal) };
+            // [ActiveIssue("https://github.com/xunit/xunit/issues/1771")]
+            //yield return new object[] { default(decimal) };
             yield return new object[] { default(string) };
             yield return new object[] { default(object) };
         }

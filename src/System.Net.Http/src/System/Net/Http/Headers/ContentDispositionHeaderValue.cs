@@ -97,7 +97,7 @@ namespace System.Net.Http.Headers
                 if (sizeParameter != null)
                 {
                     string sizeString = sizeParameter.Value;
-                    if (UInt64.TryParse(sizeString, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+                    if (ulong.TryParse(sizeString, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
                     {
                         return (long)value;
                     }
@@ -126,7 +126,7 @@ namespace System.Net.Http.Headers
                 else
                 {
                     string sizeString = value.Value.ToString(CultureInfo.InvariantCulture);
-                    _parameters.Add(new NameValueHeaderValue(size, sizeString));
+                    Parameters.Add(new NameValueHeaderValue(size, sizeString));
                 }
             }
         }
@@ -301,7 +301,7 @@ namespace System.Net.Http.Headers
             int dispositionTypeLength = GetDispositionTypeExpressionLength(dispositionType, 0, out tempDispositionType);
             if ((dispositionTypeLength == 0) || (tempDispositionType.Length != dispositionType.Length))
             {
-                throw new FormatException(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                throw new FormatException(SR.Format(System.Globalization.CultureInfo.InvariantCulture,
                     SR.net_http_headers_invalid_value, dispositionType));
             }
         }
@@ -318,13 +318,13 @@ namespace System.Net.Http.Headers
             DateTimeOffset date;
             if (dateParameter != null)
             {
-                string dateString = dateParameter.Value;
+                ReadOnlySpan<char> dateString = dateParameter.Value;
                 // Should have quotes, remove them.
                 if (IsQuoted(dateString))
                 {
-                    dateString = dateString.Substring(1, dateString.Length - 2);
+                    dateString = dateString.Slice(1, dateString.Length - 2);
                 }
-                if (HttpRuleParser.TryStringToDate(dateString, out date))
+                if (HttpDateParser.TryStringToDate(dateString, out date))
                 {
                     return date;
                 }
@@ -347,7 +347,7 @@ namespace System.Net.Http.Headers
             else
             {
                 // Must always be quoted.
-                string dateString = "\"" + HttpRuleParser.DateToString(date.Value) + "\"";
+                string dateString = "\"" + HttpDateParser.DateToString(date.Value) + "\"";
                 if (dateParameter != null)
                 {
                     dateParameter.Value = dateString;
@@ -406,7 +406,7 @@ namespace System.Net.Http.Headers
                 string processedValue = string.Empty;
                 if (parameter.EndsWith("*", StringComparison.Ordinal))
                 {
-                    processedValue = Encode5987(value);
+                    processedValue = HeaderUtilities.Encode5987(value);
                 }
                 else
                 {
@@ -438,7 +438,7 @@ namespace System.Net.Http.Headers
 
             if (result.IndexOf("\"", 0, StringComparison.Ordinal) >= 0) // Only bounding quotes are allowed.
             {
-                throw new ArgumentException(string.Format(CultureInfo.InvariantCulture,
+                throw new ArgumentException(SR.Format(CultureInfo.InvariantCulture,
                     SR.net_http_headers_invalid_value, input));
             }
             else if (RequiresEncoding(result))
@@ -460,12 +460,12 @@ namespace System.Net.Http.Headers
         }
 
         // Returns true if the value starts and ends with a quote.
-        private bool IsQuoted(string value)
+        private bool IsQuoted(ReadOnlySpan<char> value)
         {
-            Debug.Assert(value != null);
-
-            return value.Length > 1 && value.StartsWith("\"", StringComparison.Ordinal)
-                && value.EndsWith("\"", StringComparison.Ordinal);
+            return
+                value.Length > 1 &&
+                value[0] == '"' &&
+                value[value.Length - 1] == '"';
         }
 
         // tspecials are required to be in a quoted string.  Only non-ascii needs to be encoded.
@@ -532,35 +532,6 @@ namespace System.Net.Http.Headers
             return false;
         }
 
-        // Encode a string using RFC 5987 encoding.
-        // encoding'lang'PercentEncodedSpecials
-        private string Encode5987(string input)
-        {
-            StringBuilder builder = new StringBuilder("utf-8\'\'");
-            foreach (char c in input)
-            {
-                // attr-char = ALPHA / DIGIT / "!" / "#" / "$" / "&" / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
-                //      ; token except ( "*" / "'" / "%" )
-                if (c > 0x7F) // Encodes as multiple utf-8 bytes
-                {
-                    byte[] bytes = Encoding.UTF8.GetBytes(c.ToString());
-                    foreach (byte b in bytes)
-                    {
-                        builder.Append(UriShim.HexEscape((char)b));
-                    }
-                }
-                else if (!HttpRuleParser.IsTokenChar(c) || c == '*' || c == '\'' || c == '%')
-                {
-                    // ASCII - Only one encoded byte.
-                    builder.Append(UriShim.HexEscape(c));
-                }
-                else
-                {
-                    builder.Append(c);
-                }
-            }
-            return builder.ToString();
-        }
 
         // Attempt to decode using RFC 5987 encoding.
         // encoding'language'my%20string
@@ -592,10 +563,10 @@ namespace System.Net.Http.Headers
                 int unescapedBytesCount = 0;
                 for (int index = 0; index < dataString.Length; index++)
                 {
-                    if (UriShim.IsHexEncoding(dataString, index)) // %FF
+                    if (Uri.IsHexEncoding(dataString, index)) // %FF
                     {
                         // Unescape and cache bytes, multi-byte characters must be decoded all at once.
-                        unescapedBytes[unescapedBytesCount++] = (byte)UriShim.HexUnescape(dataString, ref index);
+                        unescapedBytes[unescapedBytesCount++] = (byte)Uri.HexUnescape(dataString, ref index);
                         index--; // HexUnescape did +=3; Offset the for loop's ++
                     }
                     else

@@ -2,18 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Text;
+using System.ComponentModel;
+using System.Collections;
+using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Text;
-    using System.ComponentModel;
-    using System.Collections;
-    using System.Diagnostics;
-    using System.Globalization;
-    using System.Runtime.InteropServices;
-    using System.Security.AccessControl;
-    using System.Security.Permissions;
-
     public class ActiveDirectorySchemaClass : IDisposable
     {
         // private variables
@@ -53,12 +51,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if ((context.Name == null) && (!context.isRootDomain()))
             {
-                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, "context");
+                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, nameof(context));
             }
 
             if (context.Name != null)
@@ -66,18 +64,18 @@ namespace System.DirectoryServices.ActiveDirectory
                 // the target should be a valid forest name or a server
                 if (!((context.isRootDomain()) || (context.isADAMConfigSet()) || (context.isServer())))
                 {
-                    throw new ArgumentException(SR.NotADOrADAM, "context");
+                    throw new ArgumentException(SR.NotADOrADAM, nameof(context));
                 }
             }
 
             if (ldapDisplayName == null)
             {
-                throw new ArgumentNullException("ldapDisplayName");
+                throw new ArgumentNullException(nameof(ldapDisplayName));
             }
 
             if (ldapDisplayName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "ldapDisplayName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(ldapDisplayName));
             }
 
             _context = new DirectoryContext(context);
@@ -131,7 +129,7 @@ namespace System.DirectoryServices.ActiveDirectory
             catch (ActiveDirectoryObjectNotFoundException)
             {
                 // this is the case where the context is a config set and we could not find an ADAM instance in that config set
-                throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.ADAMInstanceNotFoundInConfigSet , context.Name));
+                throw new ActiveDirectoryOperationException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet , context.Name));
             }
 
             // set the bind flag
@@ -233,30 +231,30 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if ((context.Name == null) && (!context.isRootDomain()))
             {
-                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, "context");
+                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, nameof(context));
             }
 
             if (context.Name != null)
             {
                 if (!(context.isRootDomain() || context.isServer() || context.isADAMConfigSet()))
                 {
-                    throw new ArgumentException(SR.NotADOrADAM, "context");
+                    throw new ArgumentException(SR.NotADOrADAM, nameof(context));
                 }
             }
 
             if (ldapDisplayName == null)
             {
-                throw new ArgumentNullException("ldapDisplayName");
+                throw new ArgumentNullException(nameof(ldapDisplayName));
             }
 
             if (ldapDisplayName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "ldapDisplayName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(ldapDisplayName));
             }
 
             //  work with copy of the context
@@ -308,7 +306,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 catch (ActiveDirectoryObjectNotFoundException)
                 {
                     // this is the case where the context is a config set and we could not find an ADAM instance in that config set
-                    throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.ADAMInstanceNotFoundInConfigSet , _context.Name));
+                    throw new ActiveDirectoryOperationException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet , _context.Name));
                 }
 
                 // set the ldap display name property
@@ -982,7 +980,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 // validate the value that is being set
                 if (value < SchemaClassType.Type88 || value > SchemaClassType.Auxiliary)
                 {
-                    throw new InvalidEnumArgumentException("value", (int)value, typeof(SchemaClassType));
+                    throw new InvalidEnumArgumentException(nameof(value), (int)value, typeof(SchemaClassType));
                 }
 
                 if (isBound)
@@ -1098,7 +1096,7 @@ namespace System.DirectoryServices.ActiveDirectory
             Debug.Assert(values != null);
             if (values.Count < 1 && mustExist)
             {
-                throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.PropertyNotFound , propertyName));
+                throw new ActiveDirectoryOperationException(SR.Format(SR.PropertyNotFound , propertyName));
             }
             else if (values.Count > 0)
             {
@@ -1340,7 +1338,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
                 string filter = "(&(" + PropertyManager.ObjectCategory + "=classSchema)" + str.ToString() + "(!(" + PropertyManager.IsDefunct + "=TRUE)))";
 
-                string[] propertiesToLoad = new String[1];
+                string[] propertiesToLoad = new string[1];
                 propertiesToLoad[0] = PropertyManager.LdapDisplayName;
 
                 ADSearcher searcher = new ADSearcher(_schemaEntry, filter, propertiesToLoad, SearchScope.OneLevel);
@@ -1418,7 +1416,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
                 string filter = "(&(" + PropertyManager.ObjectCategory + "=attributeSchema)" + str.ToString() + "(!(" + PropertyManager.IsDefunct + "=TRUE)))";
 
-                string[] propertiesToLoad = new String[1];
+                string[] propertiesToLoad = new string[1];
                 propertiesToLoad[0] = PropertyManager.LdapDisplayName;
 
                 ADSearcher searcher = new ADSearcher(_schemaEntry, filter, propertiesToLoad, SearchScope.OneLevel);

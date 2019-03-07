@@ -1,16 +1,15 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Reflection.Emit;
 using Xunit;
 
 namespace System.Tests
 {
-    public static partial class EnumTests
+    public partial class EnumTests
     {
         public static IEnumerable<object[]> Parse_TestData()
         {
@@ -19,48 +18,64 @@ namespace System.Tests
             yield return new object[] { "mAx", true, SByteEnum.Max };
             yield return new object[] { "1", false, SByteEnum.One };
             yield return new object[] { "5", false, (SByteEnum)5 };
-            
+            yield return new object[] { sbyte.MinValue.ToString(), false, (SByteEnum)sbyte.MinValue };
+            yield return new object[] { sbyte.MaxValue.ToString(), false, (SByteEnum)sbyte.MaxValue };
+
             // Byte
             yield return new object[] { "Min", false, ByteEnum.Min };
             yield return new object[] { "mAx", true, ByteEnum.Max };
             yield return new object[] { "1", false, ByteEnum.One };
             yield return new object[] { "5", false, (ByteEnum)5 };
+            yield return new object[] { byte.MinValue.ToString(), false, (ByteEnum)byte.MinValue };
+            yield return new object[] { byte.MaxValue.ToString(), false, (ByteEnum)byte.MaxValue };
 
             // Int16
             yield return new object[] { "Min", false, Int16Enum.Min };
             yield return new object[] { "mAx", true, Int16Enum.Max };
             yield return new object[] { "1", false, Int16Enum.One };
             yield return new object[] { "5", false, (Int16Enum)5 };
+            yield return new object[] { short.MinValue.ToString(), false, (Int16Enum)short.MinValue };
+            yield return new object[] { short.MaxValue.ToString(), false, (Int16Enum)short.MaxValue };
 
             // UInt16
             yield return new object[] { "Min", false, UInt16Enum.Min };
             yield return new object[] { "mAx", true, UInt16Enum.Max };
             yield return new object[] { "1", false, UInt16Enum.One };
             yield return new object[] { "5", false, (UInt16Enum)5 };
+            yield return new object[] { ushort.MinValue.ToString(), false, (UInt16Enum)ushort.MinValue };
+            yield return new object[] { ushort.MaxValue.ToString(), false, (UInt16Enum)ushort.MaxValue };
 
             // Int32
             yield return new object[] { "Min", false, Int32Enum.Min };
             yield return new object[] { "mAx", true, Int32Enum.Max };
             yield return new object[] { "1", false, Int32Enum.One };
             yield return new object[] { "5", false, (Int32Enum)5 };
+            yield return new object[] { int.MinValue.ToString(), false, (Int32Enum)int.MinValue };
+            yield return new object[] { int.MaxValue.ToString(), false, (Int32Enum)int.MaxValue };
 
             // UInt32
             yield return new object[] { "Min", false, UInt32Enum.Min };
             yield return new object[] { "mAx", true, UInt32Enum.Max };
             yield return new object[] { "1", false, UInt32Enum.One };
             yield return new object[] { "5", false, (UInt32Enum)5 };
+            yield return new object[] { uint.MinValue.ToString(), false, (UInt32Enum)uint.MinValue };
+            yield return new object[] { uint.MaxValue.ToString(), false, (UInt32Enum)uint.MaxValue };
 
             // Int64
             yield return new object[] { "Min", false, Int64Enum.Min };
             yield return new object[] { "mAx", true, Int64Enum.Max };
             yield return new object[] { "1", false, Int64Enum.One };
             yield return new object[] { "5", false, (Int64Enum)5 };
+            yield return new object[] { long.MinValue.ToString(), false, (Int64Enum)long.MinValue };
+            yield return new object[] { long.MaxValue.ToString(), false, (Int64Enum)long.MaxValue };
 
             // UInt64
             yield return new object[] { "Min", false, UInt64Enum.Min };
             yield return new object[] { "mAx", true, UInt64Enum.Max };
             yield return new object[] { "1", false, UInt64Enum.One };
             yield return new object[] { "5", false, (UInt64Enum)5 };
+            yield return new object[] { ulong.MinValue.ToString(), false, (UInt64Enum)ulong.MinValue };
+            yield return new object[] { ulong.MaxValue.ToString(), false, (UInt64Enum)ulong.MaxValue };
 
 #if netcoreapp
             // Char
@@ -80,7 +95,7 @@ namespace System.Tests
             yield return new object[] { "Value1", false, Enum.GetValues(s_doubleEnumType).GetValue(0) };
             yield return new object[] { "vaLue2", true, Enum.GetValues(s_doubleEnumType).GetValue(0) };
 #endif // netcoreapp
-            
+
             // SimpleEnum
             yield return new object[] { "Red", false, SimpleEnum.Red };
             yield return new object[] { " Red", false, SimpleEnum.Red };
@@ -122,10 +137,11 @@ namespace System.Tests
 
         public static IEnumerable<object[]> Parse_Invalid_TestData()
         {
-            // SimpleEnum
             yield return new object[] { null, "", false, typeof(ArgumentNullException) };
-            yield return new object[] { typeof(SimpleEnum), null, false, typeof(ArgumentNullException) };
             yield return new object[] { typeof(object), "", false, typeof(ArgumentException) };
+            yield return new object[] { typeof(int), "", false, typeof(ArgumentException) };
+
+            yield return new object[] { typeof(SimpleEnum), null, false, typeof(ArgumentNullException) };
             yield return new object[] { typeof(SimpleEnum), "", false, typeof(ArgumentException) };
             yield return new object[] { typeof(SimpleEnum), "    \t", false, typeof(ArgumentException) };
             yield return new object[] { typeof(SimpleEnum), " red ", false, typeof(ArgumentException) };
@@ -139,10 +155,33 @@ namespace System.Tests
             yield return new object[] { typeof(SimpleEnum), "Red,Blue, ", false, typeof(ArgumentException) };
             yield return new object[] { typeof(SimpleEnum), "Red Blue", false, typeof(ArgumentException) };
             yield return new object[] { typeof(SimpleEnum), "1,Blue", false, typeof(ArgumentException) };
+            yield return new object[] { typeof(SimpleEnum), "1,1", false, typeof(ArgumentException) };
             yield return new object[] { typeof(SimpleEnum), "Blue,1", false, typeof(ArgumentException) };
             yield return new object[] { typeof(SimpleEnum), "Blue, 1", false, typeof(ArgumentException) };
-            yield return new object[] { typeof(SimpleEnum), "2147483649", false, typeof(ArgumentException) };
-            yield return new object[] { typeof(SimpleEnum), "2147483648", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(ByteEnum), "-1", false, typeof(OverflowException) };
+            yield return new object[] { typeof(ByteEnum), "256", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(SByteEnum), "-129", false, typeof(OverflowException) };
+            yield return new object[] { typeof(SByteEnum), "128", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(Int16Enum), "-32769", false, typeof(OverflowException) };
+            yield return new object[] { typeof(Int16Enum), "32768", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(UInt16Enum), "-1", false, typeof(OverflowException) };
+            yield return new object[] { typeof(UInt16Enum), "65536", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(Int32Enum), "-2147483649", false, typeof(OverflowException) };
+            yield return new object[] { typeof(Int32Enum), "2147483648", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(UInt32Enum), "-1", false, typeof(OverflowException) };
+            yield return new object[] { typeof(UInt32Enum), "4294967296", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(Int64Enum), "-9223372036854775809", false, typeof(OverflowException) };
+            yield return new object[] { typeof(Int64Enum), "9223372036854775808", false, typeof(OverflowException) };
+
+            yield return new object[] { typeof(UInt64Enum), "-1", false, typeof(OverflowException) };
+            yield return new object[] { typeof(UInt64Enum), "18446744073709551616", false, typeof(OverflowException) };
 
 #if netcoreapp
             // Char
@@ -322,7 +361,7 @@ namespace System.Tests
             }
             else
             {
-                Format(enumType, value, "G", expected);
+                Format(enumType, value, "G", expected ?? value.ToString());
             }
         }
 
@@ -338,12 +377,12 @@ namespace System.Tests
         public static void GetName_Invalid()
         {
             Type t = typeof(SimpleEnum);
-            Assert.Throws<ArgumentNullException>("enumType", () => Enum.GetName(null, 1)); // Enum type is null
-            Assert.Throws<ArgumentNullException>("value", () => Enum.GetName(t, null)); // Value is null
+            AssertExtensions.Throws<ArgumentNullException>("enumType", () => Enum.GetName(null, 1)); // Enum type is null
+            AssertExtensions.Throws<ArgumentNullException>("value", () => Enum.GetName(t, null)); // Value is null
 
-            Assert.Throws<ArgumentException>(null, () => Enum.GetName(typeof(object), 1)); // Enum type is not an enum
-            Assert.Throws<ArgumentException>("value", () => Enum.GetName(t, "Red")); // Value is not the type of the enum's raw data
-            Assert.Throws<ArgumentException>("value", () => Enum.GetName(t, (IntPtr)0)); // Value is out of range
+            AssertExtensions.Throws<ArgumentException>(null, () => Enum.GetName(typeof(object), 1)); // Enum type is not an enum
+            AssertExtensions.Throws<ArgumentException>("value", () => Enum.GetName(t, "Red")); // Value is not the type of the enum's raw data
+            AssertExtensions.Throws<ArgumentException>("value", () => Enum.GetName(t, (IntPtr)0)); // Value is out of range
         }
 
         [Theory]
@@ -367,6 +406,21 @@ namespace System.Tests
             Assert.Equal(expected, Enum.GetName(enumType, value));
         }
 
+        [Theory]
+        [InlineData(SimpleEnum.Blue, TypeCode.Int32)]
+        [InlineData(ByteEnum.Max, TypeCode.Byte)]
+        [InlineData(SByteEnum.Min, TypeCode.SByte)]
+        [InlineData(UInt16Enum.Max, TypeCode.UInt16)]
+        [InlineData(Int16Enum.Min, TypeCode.Int16)]
+        [InlineData(UInt32Enum.Max, TypeCode.UInt32)]
+        [InlineData(Int32Enum.Min, TypeCode.Int32)]
+        [InlineData(UInt64Enum.Max, TypeCode.UInt64)]
+        [InlineData(Int64Enum.Min, TypeCode.Int64)]
+        public static void GetTypeCode_Enum_ReturnsExpected(Enum e, TypeCode expected)
+        {
+            Assert.Equal(expected, e.GetTypeCode());
+        }
+
         public static IEnumerable<object[]> IsDefined_TestData()
         {
             // SByte
@@ -382,8 +436,8 @@ namespace System.Tests
             yield return new object[] { typeof(ByteEnum), "None", false };
             yield return new object[] { typeof(ByteEnum), ByteEnum.One, true };
             yield return new object[] { typeof(ByteEnum), (ByteEnum)99, false };
-            yield return new object[] { typeof(ByteEnum), (Byte)1, true };
-            yield return new object[] { typeof(ByteEnum), (Byte)99, false };
+            yield return new object[] { typeof(ByteEnum), (byte)1, true };
+            yield return new object[] { typeof(ByteEnum), (byte)99, false };
 
             // Int16
             yield return new object[] { typeof(Int16Enum), "One", true };
@@ -467,14 +521,14 @@ namespace System.Tests
         {
             Type t = typeof(SimpleEnum);
 
-            Assert.Throws<ArgumentNullException>("enumType", () => Enum.IsDefined(null, 1)); // Enum type is null
-            Assert.Throws<ArgumentNullException>("value", () => Enum.IsDefined(t, null)); // Value is null
+            AssertExtensions.Throws<ArgumentNullException>("enumType", () => Enum.IsDefined(null, 1)); // Enum type is null
+            AssertExtensions.Throws<ArgumentNullException>("value", () => Enum.IsDefined(t, null)); // Value is null
 
-            Assert.Throws<ArgumentException>(null, () => Enum.IsDefined(t, Int32Enum.One)); // Value is different enum type
+            AssertExtensions.Throws<ArgumentException>(null, () => Enum.IsDefined(t, Int32Enum.One)); // Value is different enum type
 
             // Value is not a valid type (MSDN claims this should throw InvalidOperationException)
-            Assert.Throws<ArgumentException>(null, () => Enum.IsDefined(t, true));
-            Assert.Throws<ArgumentException>(null, () => Enum.IsDefined(t, 'a'));
+            AssertExtensions.Throws<ArgumentException>(null, () => Enum.IsDefined(t, true));
+            AssertExtensions.Throws<ArgumentException>(null, () => Enum.IsDefined(t, 'a'));
 
             // Non-integers throw InvalidOperationException prior to Win8P.
             Assert.Throws<InvalidOperationException>(() => Enum.IsDefined(t, (IntPtr)0));
@@ -620,8 +674,8 @@ namespace System.Tests
         [Fact]
         public static void HasFlag_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("flag", () => Int32Enum.One.HasFlag(null)); // Flag is null
-            Assert.Throws<ArgumentException>(null, () => Int32Enum.One.HasFlag((SimpleEnum)0x3000)); // Enum is not the same type as the instance
+            AssertExtensions.Throws<ArgumentNullException>("flag", () => Int32Enum.One.HasFlag(null)); // Flag is null
+            AssertExtensions.Throws<ArgumentException>(null, () => Int32Enum.One.HasFlag((SimpleEnum)0x3000)); // Enum is not the same type as the instance
         }
 
         public static IEnumerable<object[]> ToObject_TestData()
@@ -696,7 +750,7 @@ namespace System.Tests
             yield return new object[] { typeof(Enum), typeof(ArgumentException) };
             yield return new object[] { typeof(object), typeof(ArgumentException) };
 #if netcoreapp
-            yield return new object[] { GetNonRuntimeEnumTypeBuilder(typeof(int)).AsType(), typeof(ArgumentException) };
+            yield return new object[] { GetNonRuntimeEnumTypeBuilder(typeof(int)), typeof(ArgumentException) };
 #endif // netcoreapp            
         }
 
@@ -732,8 +786,12 @@ namespace System.Tests
         [MemberData(nameof(ToObject_InvalidValue_TestData))]
         public static void ToObject_InvalidValue_ThrowsException(Type enumType, object value, Type exceptionType)
         {
-            ArgumentException ex = (ArgumentException)Assert.Throws(exceptionType, () => Enum.ToObject(enumType, value));
-            Assert.Equal("value", ex.ParamName);
+            if (exceptionType == typeof(ArgumentNullException))
+                AssertExtensions.Throws<ArgumentNullException>("value", () => Enum.ToObject(enumType, value));
+            else if (exceptionType == typeof(ArgumentException))
+                AssertExtensions.Throws<ArgumentException>("value", () => Enum.ToObject(enumType, value));
+            else
+                throw new Exception($"Unexpected exception type in {nameof(ToObject_InvalidValue_TestData)} : {exceptionType}");
         }
 
         public static IEnumerable<object[]> Equals_TestData()
@@ -961,8 +1019,8 @@ namespace System.Tests
         [Fact]
         public static void CompareTo_ObjectNotEnum_ThrowsArgumentException()
         {
-            Assert.Throws<ArgumentException>(null, () => SimpleEnum.Red.CompareTo((sbyte)1)); // Target is not an enum type
-            Assert.Throws<ArgumentException>(null, () => SimpleEnum.Red.CompareTo(Int32Enum.One)); // Target is a different enum type
+            AssertExtensions.Throws<ArgumentException>(null, () => SimpleEnum.Red.CompareTo((sbyte)1)); // Target is not an enum type
+            AssertExtensions.Throws<ArgumentException>(null, () => SimpleEnum.Red.CompareTo(Int32Enum.One)); // Target is a different enum type
         }
 
         public static IEnumerable<object[]> GetUnderlyingType_TestData()
@@ -995,8 +1053,8 @@ namespace System.Tests
         [Fact]
         public static void GetUnderlyingType_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("enumType", () => Enum.GetUnderlyingType(null)); // Enum type is null
-            Assert.Throws<ArgumentException>("enumType", () => Enum.GetUnderlyingType(typeof(Enum))); // Enum type is simply an enum
+            AssertExtensions.Throws<ArgumentNullException>("enumType", () => Enum.GetUnderlyingType(null)); // Enum type is null
+            AssertExtensions.Throws<ArgumentException>("enumType", () => Enum.GetUnderlyingType(typeof(Enum))); // Enum type is simply an enum
         }
 
         public static IEnumerable<object[]> GetNames_GetValues_TestData()
@@ -1135,15 +1193,15 @@ namespace System.Tests
         [Fact]
         public static void GetNames_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("enumType", () => Enum.GetNames(null)); // Enum type is null
-            Assert.Throws<ArgumentException>("enumType", () => Enum.GetNames(typeof(object))); // Enum type is not an enum
+            AssertExtensions.Throws<ArgumentNullException>("enumType", () => Enum.GetNames(null)); // Enum type is null
+            AssertExtensions.Throws<ArgumentException>("enumType", () => Enum.GetNames(typeof(object))); // Enum type is not an enum
         }
 
         [Fact]
         public static void GetValues_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("enumType", () => Enum.GetValues(null)); // Enum type is null
-            Assert.Throws<ArgumentException>("enumType", () => Enum.GetValues(typeof(object))); // Enum type is not an enum
+            AssertExtensions.Throws<ArgumentNullException>("enumType", () => Enum.GetValues(null)); // Enum type is null
+            AssertExtensions.Throws<ArgumentException>("enumType", () => Enum.GetValues(typeof(object))); // Enum type is not an enum
         }
 
         public static IEnumerable<object[]> ToString_Format_TestData()
@@ -1221,6 +1279,7 @@ namespace System.Tests
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)0), "D", ((char)0).ToString() };
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)1), "D", ((char)1).ToString() };
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)2), "D", ((char)2).ToString() };
+            yield return new object[] { Enum.ToObject(s_charEnumType, char.MaxValue), "D", char.MaxValue.ToString() };
 
             // "D:" Bool
             yield return new object[] { Enum.ToObject(s_boolEnumType, true), "D", bool.TrueString };
@@ -1302,6 +1361,8 @@ namespace System.Tests
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)0), "X", "0000" };
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)1), "X", "0001" };
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)2), "X", "0002" };
+            yield return new object[] { Enum.ToObject(s_charEnumType, char.MaxValue), "X", "FFFF" };
+
 
             // "X": Bool
             yield return new object[] { Enum.ToObject(s_boolEnumType, false), "X", "00" };
@@ -1365,6 +1426,7 @@ namespace System.Tests
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)1), "F", "Value1" };
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)(1 | 2)), "F", "Value1, Value2" };
             yield return new object[] { Enum.ToObject(s_charEnumType, (char)5), "F", ((char)5).ToString() };
+            yield return new object[] { Enum.ToObject(s_charEnumType, char.MaxValue), "F", char.MaxValue.ToString() };
 
             // "F": Bool
             yield return new object[] { Enum.ToObject(s_boolEnumType, true), "F", "Value1" };
@@ -1385,6 +1447,11 @@ namespace System.Tests
 
             // "F": Flags Attribute
             yield return new object[] { AttributeTargets.Class | AttributeTargets.Delegate, "F", "Class, Delegate" };
+
+#if netcoreapp
+            // "G": Char
+            yield return new object[] { Enum.ToObject(s_charEnumType, char.MaxValue), "G", char.MaxValue.ToString() };
+#endif
 
             // "G": SByte
             yield return new object[] { SByteEnum.Min, "G", "Min" };
@@ -1435,25 +1502,30 @@ namespace System.Tests
             yield return new object[] { AttributeTargets.Class | AttributeTargets.Delegate, "G", "Class, Delegate" };
         }
 
+#pragma warning disable 618 // ToString with IFormatProvider is marked as Obsolete.
         [Theory]
         [MemberData(nameof(ToString_Format_TestData))]
         public static void ToString_Format(Enum e, string format, string expected)
         {
             if (format.ToUpperInvariant() == "G")
             {
-                string nullString = null;
-
                 Assert.Equal(expected, e.ToString());
-                Assert.Equal(expected, e.ToString(""));
-                Assert.Equal(expected, e.ToString(nullString));
+                Assert.Equal(expected, e.ToString(string.Empty));
+                Assert.Equal(expected, e.ToString((string)null));
+
+                Assert.Equal(expected, e.ToString((IFormatProvider)null));
             }
-            // Format string is non-case-sensitive
+
+            // Format string is case-insensitive.
             Assert.Equal(expected, e.ToString(format));
             Assert.Equal(expected, e.ToString(format.ToUpperInvariant()));
             Assert.Equal(expected, e.ToString(format.ToLowerInvariant()));
 
+            Assert.Equal(expected, e.ToString(format, (IFormatProvider)null));
+
             Format(e.GetType(), e, format, expected);
         }
+#pragma warning restore 618
 
         [Fact]
         public static void ToString_Format_MultipleMatches()
@@ -1499,16 +1571,16 @@ namespace System.Tests
         [Fact]
         public static void Format_Invalid()
         {
-            Assert.Throws<ArgumentNullException>("enumType", () => Enum.Format(null, (Int32Enum)1, "F")); // Enum type is null
-            Assert.Throws<ArgumentNullException>("value", () => Enum.Format(typeof(SimpleEnum), null, "F")); // Value is null
-            Assert.Throws<ArgumentNullException>("format", () => Enum.Format(typeof(SimpleEnum), SimpleEnum.Red, null)); // Format is null
+            AssertExtensions.Throws<ArgumentNullException>("enumType", () => Enum.Format(null, (Int32Enum)1, "F")); // Enum type is null
+            AssertExtensions.Throws<ArgumentNullException>("value", () => Enum.Format(typeof(SimpleEnum), null, "F")); // Value is null
+            AssertExtensions.Throws<ArgumentNullException>("format", () => Enum.Format(typeof(SimpleEnum), SimpleEnum.Red, null)); // Format is null
 
-            Assert.Throws<ArgumentException>("enumType", () => Enum.Format(typeof(object), 1, "F")); // Enum type is not an enum type
+            AssertExtensions.Throws<ArgumentException>("enumType", () => Enum.Format(typeof(object), 1, "F")); // Enum type is not an enum type
 
-            Assert.Throws<ArgumentException>(null, () => Enum.Format(typeof(SimpleEnum), (Int32Enum)1, "F")); // Value is of the wrong enum type
+            AssertExtensions.Throws<ArgumentException>(null, () => Enum.Format(typeof(SimpleEnum), (Int32Enum)1, "F")); // Value is of the wrong enum type
 
-            Assert.Throws<ArgumentException>(null, () => Enum.Format(typeof(SimpleEnum), (short)1, "F")); // Value is of the wrong integral
-            Assert.Throws<ArgumentException>(null, () => Enum.Format(typeof(SimpleEnum), "Red", "F")); // Value is of the wrong integral
+            AssertExtensions.Throws<ArgumentException>(null, () => Enum.Format(typeof(SimpleEnum), (short)1, "F")); // Value is of the wrong integral
+            AssertExtensions.Throws<ArgumentException>(null, () => Enum.Format(typeof(SimpleEnum), "Red", "F")); // Value is of the wrong integral
 
             Assert.Throws<FormatException>(() => Enum.Format(typeof(SimpleEnum), SimpleEnum.Red, "")); // Format is empty
             Assert.Throws<FormatException>(() => Enum.Format(typeof(SimpleEnum), SimpleEnum.Red, "   \t")); // Format is whitespace

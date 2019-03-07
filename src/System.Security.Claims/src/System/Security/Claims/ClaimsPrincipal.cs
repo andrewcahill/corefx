@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Security.Principal;
@@ -13,7 +12,6 @@ namespace System.Security.Claims
     /// <summary>
     /// Concrete IPrincipal supporting multiple claims-based identities
     /// </summary>
-    [Serializable]
     public class ClaimsPrincipal : IPrincipal
     {
         private enum SerializationMask
@@ -23,10 +21,7 @@ namespace System.Security.Claims
             UserData = 2
         }
 
-        [NonSerialized]
         private readonly List<ClaimsIdentity> _identities = new List<ClaimsIdentity>();
-
-        [NonSerialized]
         private readonly byte[] _userSerializationData;
 
         private static Func<IEnumerable<ClaimsIdentity>, ClaimsIdentity> s_identitySelector = SelectPrimaryIdentity;
@@ -34,10 +29,7 @@ namespace System.Security.Claims
 
         protected ClaimsPrincipal(SerializationInfo info, StreamingContext context)
         {
-            if (null == info)
-            {
-                throw new ArgumentNullException(nameof(info));
-            }
+            throw new PlatformNotSupportedException();
         }
 
         /// <summary>
@@ -104,8 +96,6 @@ namespace System.Security.Claims
                 throw new ArgumentNullException(nameof(identities));
             }
 
-            Contract.EndContractBlock();
-
             _identities.AddRange(identities);
         }
 
@@ -120,8 +110,6 @@ namespace System.Security.Claims
             {
                 throw new ArgumentNullException(nameof(identity));
             }
-
-            Contract.EndContractBlock();
 
             ClaimsIdentity ci = identity as ClaimsIdentity;
             if (ci != null)
@@ -145,8 +133,6 @@ namespace System.Security.Claims
             {
                 throw new ArgumentNullException(nameof(principal));
             }
-
-            Contract.EndContractBlock();
 
             //
             // If IPrincipal is a ClaimsPrincipal add all of the identities
@@ -218,8 +204,6 @@ namespace System.Security.Claims
                 throw new ArgumentNullException(nameof(identity));
             }
 
-            Contract.EndContractBlock();
-
             _identities.Add(identity);
         }
 
@@ -234,8 +218,6 @@ namespace System.Security.Claims
             {
                 throw new ArgumentNullException(nameof(identities));
             }
-
-            Contract.EndContractBlock();
 
             _identities.AddRange(identities);
         }
@@ -323,8 +305,6 @@ namespace System.Security.Claims
                 throw new ArgumentNullException(nameof(match));
             }
 
-            Contract.EndContractBlock();
-
             foreach (ClaimsIdentity identity in Identities)
             {
                 if (identity != null)
@@ -351,7 +331,6 @@ namespace System.Security.Claims
                 throw new ArgumentNullException(nameof(type));
             }
 
-            Contract.EndContractBlock();
             foreach (ClaimsIdentity identity in Identities)
             {
                 if (identity != null)
@@ -377,8 +356,6 @@ namespace System.Security.Claims
             {
                 throw new ArgumentNullException(nameof(match));
             }
-
-            Contract.EndContractBlock();
 
             Claim claim = null;
 
@@ -411,8 +388,6 @@ namespace System.Security.Claims
                 throw new ArgumentNullException(nameof(type));
             }
 
-            Contract.EndContractBlock();
-
             Claim claim = null;
 
             for (int i = 0; i < _identities.Count; i++)
@@ -443,8 +418,6 @@ namespace System.Security.Claims
             {
                 throw new ArgumentNullException(nameof(match));
             }
-
-            Contract.EndContractBlock();
 
             for (int i = 0; i < _identities.Count; i++)
             {
@@ -480,8 +453,6 @@ namespace System.Security.Claims
             {
                 throw new ArgumentNullException(nameof(value));
             }
-
-            Contract.EndContractBlock();
 
             for (int i = 0; i < _identities.Count; i++)
             {
@@ -621,15 +592,7 @@ namespace System.Security.Claims
 
         protected virtual void GetObjectData(SerializationInfo info, StreamingContext context)
         {
-            if (null == info)
-            {
-                throw new ArgumentNullException(nameof(info));
-            }
-
-            if (_identities.Count > 0)
-            {
-                throw new PlatformNotSupportedException(SR.PlatformNotSupported_Serialization); // BinaryFormatter and WindowsIdentity would be needed
-            }
+            throw new PlatformNotSupportedException();
         }
     }
 }

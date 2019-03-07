@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.Data;
 using System.Data.Common;
 using System.Diagnostics;                   // Debug services
 using System.Runtime.InteropServices;
@@ -64,7 +62,7 @@ namespace System.Data.Odbc
                     break;
 
                 case ODBC32.SQL_C.BIT:
-                    Byte b = ReadByte(offset);
+                    byte b = ReadByte(offset);
                     value = (b != 0x00);
                     break;
 
@@ -143,7 +141,7 @@ namespace System.Data.Odbc
                     break;
 
                 default:
-                    Debug.Assert(false, "UnknownSQLCType");
+                    Debug.Fail("UnknownSQLCType");
                     value = null;
                     break;
             };
@@ -166,7 +164,7 @@ namespace System.Data.Odbc
 
                         //So we have to copy the raw bytes of the string ourself?!
 
-                        Char[] rgChars;
+                        char[] rgChars;
                         int length;
                         Debug.Assert(value is string || value is char[], "Only string or char[] can be marshaled to WCHAR");
 
@@ -204,7 +202,7 @@ namespace System.Data.Odbc
                 case ODBC32.SQL_C.BINARY:
                 case ODBC32.SQL_C.CHAR:
                     {
-                        Byte[] rgBytes = (Byte[])value;
+                        byte[] rgBytes = (byte[])value;
                         int length = rgBytes.Length;
 
                         Debug.Assert((valueOffset <= length), "Offset out of Range");
@@ -229,27 +227,27 @@ namespace System.Data.Odbc
                     }
 
                 case ODBC32.SQL_C.UTINYINT:
-                    WriteByte(offset, (Byte)value);
+                    WriteByte(offset, (byte)value);
                     break;
 
                 case ODBC32.SQL_C.SSHORT:   //Int16
-                    WriteInt16(offset, (Int16)value);
+                    WriteInt16(offset, (short)value);
                     break;
 
                 case ODBC32.SQL_C.SLONG:    //Int32
-                    WriteInt32(offset, (Int32)value);
+                    WriteInt32(offset, (int)value);
                     break;
 
                 case ODBC32.SQL_C.REAL:     //float
-                    WriteSingle(offset, (Single)value);
+                    WriteSingle(offset, (float)value);
                     break;
 
                 case ODBC32.SQL_C.SBIGINT:  //Int64
-                    WriteInt64(offset, (Int64)value);
+                    WriteInt64(offset, (long)value);
                     break;
 
                 case ODBC32.SQL_C.DOUBLE:   //Double
-                    WriteDouble(offset, (Double)value);
+                    WriteDouble(offset, (double)value);
                     break;
 
                 case ODBC32.SQL_C.GUID:     //Guid
@@ -257,7 +255,7 @@ namespace System.Data.Odbc
                     break;
 
                 case ODBC32.SQL_C.BIT:
-                    WriteByte(offset, (Byte)(((bool)value) ? 1 : 0));
+                    WriteByte(offset, (byte)(((bool)value) ? 1 : 0));
                     break;
 
                 case ODBC32.SQL_C.TYPE_TIMESTAMP:
@@ -310,12 +308,12 @@ namespace System.Data.Odbc
 
                 case ODBC32.SQL_C.NUMERIC:
                     {
-                        WriteNumeric(offset, (Decimal)value, checked((byte)sizeorprecision));
+                        WriteNumeric(offset, (decimal)value, checked((byte)sizeorprecision));
                         break;
                     }
 
                 default:
-                    Debug.Assert(false, "UnknownSQLCType");
+                    Debug.Fail("UnknownSQLCType");
                     break;
             }
         }
@@ -382,7 +380,7 @@ namespace System.Data.Odbc
 
         // Returns the next token in the statement, advancing the current index to
         //  the start of the token
-        internal String NextToken()
+        internal string NextToken()
         {
             if (_token.Length != 0)
             {                   // if we've read a token before
@@ -390,7 +388,7 @@ namespace System.Data.Odbc
                 _token.Remove(0, _token.Length);        // and start over with a fresh token
             }
 
-            while ((_idx < _len) && Char.IsWhiteSpace(_sqlstatement[_idx]))
+            while ((_idx < _len) && char.IsWhiteSpace(_sqlstatement[_idx]))
             {
                 // skip whitespace
                 _idx++;
@@ -399,7 +397,7 @@ namespace System.Data.Odbc
             if (_idx == _len)
             {
                 // return if string is empty
-                return String.Empty;
+                return string.Empty;
             }
 
             int curidx = _idx;                          // start with internal index at current index
@@ -432,7 +430,7 @@ namespace System.Data.Odbc
                     {
                         // Some other marker like , ; ( or )
                         // could also be * or ?
-                        if (!Char.IsWhiteSpace(currentchar))
+                        if (!char.IsWhiteSpace(currentchar))
                         {
                             switch (currentchar)
                             {
@@ -452,7 +450,7 @@ namespace System.Data.Odbc
                 }
             }
 
-            return (_token.Length > 0) ? _token.ToString() : String.Empty;
+            return (_token.Length > 0) ? _token.ToString() : string.Empty;
         }
 
         private int GetTokenFromBracket(int curidx)
@@ -503,7 +501,7 @@ namespace System.Data.Odbc
 
         private bool IsValidNameChar(char ch)
         {
-            return (Char.IsLetterOrDigit(ch) ||
+            return (char.IsLetterOrDigit(ch) ||
                     (ch == '_') || (ch == '-') || (ch == '.') ||
                     (ch == '$') || (ch == '#') || (ch == '@') ||
                     (ch == '~') || (ch == '`') || (ch == '%') ||
@@ -513,17 +511,17 @@ namespace System.Data.Odbc
         // Searches for the token given, starting from the current position
         // If found, positions the currentindex at the
         // beginning of the token if found.
-        internal int FindTokenIndex(String tokenString)
+        internal int FindTokenIndex(string tokenString)
         {
-            String nextToken;
+            string nextToken;
             while (true)
             {
                 nextToken = NextToken();
-                if ((_idx == _len) || ADP.IsEmpty(nextToken))
+                if ((_idx == _len) || string.IsNullOrEmpty(nextToken))
                 { // fxcop
                     break;
                 }
-                if (String.Compare(tokenString, nextToken, StringComparison.OrdinalIgnoreCase) == 0)
+                if (string.Equals(tokenString, nextToken, StringComparison.OrdinalIgnoreCase))
                 {
                     return _idx;
                 }
@@ -532,10 +530,10 @@ namespace System.Data.Odbc
         }
 
         // Skips the whitespace found in the beginning of the string.
-        internal bool StartsWith(String tokenString)
+        internal bool StartsWith(string tokenString)
         {
             int tempidx = 0;
-            while ((tempidx < _len) && Char.IsWhiteSpace(_sqlstatement[tempidx]))
+            while ((tempidx < _len) && char.IsWhiteSpace(_sqlstatement[tempidx]))
             {
                 tempidx++;
             }
@@ -544,7 +542,7 @@ namespace System.Data.Odbc
                 return false;
             }
 
-            if (0 == String.Compare(_sqlstatement, tempidx, tokenString, 0, tokenString.Length, StringComparison.OrdinalIgnoreCase))
+            if (0 == string.Compare(_sqlstatement, tempidx, tokenString, 0, tokenString.Length, StringComparison.OrdinalIgnoreCase))
             {
                 // Reset current position and token
                 _idx = 0;

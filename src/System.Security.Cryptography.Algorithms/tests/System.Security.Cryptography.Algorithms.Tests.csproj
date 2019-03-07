@@ -1,24 +1,9 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ProjectGuid>{508A7D81-6462-459C-9F8F-B58FCCCFC8E7}</ProjectGuid>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netcoreapp-Unix-Debug|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netcoreapp-Unix-Release|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netcoreapp-Windows_NT-Debug|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netcoreapp-Windows_NT-Release|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netstandard-Unix-Debug|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netstandard-Unix-Release|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netstandard-Windows_NT-Debug|AnyCPU'" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'netstandard-Windows_NT-Release|AnyCPU'" />
-  <PropertyGroup Condition="'$(TargetGroup)'=='netcoreapp'">
-    <DefineConstants>$(DefineConstants);netcoreapp</DefineConstants>
+    <Configurations>netcoreapp-Unix-Debug;netcoreapp-Unix-Release;netcoreapp-Windows_NT-Debug;netcoreapp-Windows_NT-Release;netstandard-Unix-Debug;netstandard-Unix-Release;netstandard-Windows_NT-Debug;netstandard-Windows_NT-Release</Configurations>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(CommonTestPath)\System\PlatformDetection.cs">
-      <Link>CommonTest\System\PlatformDetection.cs</Link>
-    </Compile>
     <Compile Include="$(CommonTestPath)\System\IO\PositionValueStream.cs">
       <Link>CommonTest\System\IO\PositionValueStream.cs</Link>
     </Compile>
@@ -55,6 +40,12 @@
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\EC\CurveDef.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\EC\CurveDef.cs</Link>
     </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\EC\EccTestBase.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\EC\EccTestBase.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\EC\EccTestData.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\EC\EccTestData.cs</Link>
+    </Compile>
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaFactory.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaFactory.cs</Link>
     </Compile>
@@ -72,9 +63,6 @@
     </Compile>
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaTestsBase.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaTestsBase.cs</Link>
-    </Compile>
-    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaTestData.cs">
-      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaTestData.cs</Link>
     </Compile>
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\RSA\EncryptDecrypt.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\RSA\EncryptDecrypt.cs</Link>
@@ -128,25 +116,86 @@
     <Compile Include="Sha512Tests.cs" />
     <Compile Include="TripleDesProvider.cs" />
     <Compile Include="TripleDesTests.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetsWindows)' == 'true'">
+    <Compile Include="DefaultECDsaProvider.Windows.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetsWindows)' == 'true' AND '$(TargetGroup)'=='netcoreapp'">
+    <Compile Include="DefaultECDiffieHellmanProvider.Windows.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetsUnix)' == 'true'">
+    <Compile Include="DefaultECDsaProvider.Unix.cs" />
     <Compile Include="$(CommonPath)\Interop\Unix\Interop.Libraries.cs">
       <Link>Common\Interop\Unix\Interop.Libraries.cs</Link>
     </Compile>
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetsUnix)' == 'true' AND '$(Targetgroup)'=='netcoreapp'">
+    <Compile Include="DefaultECDiffieHellmanProvider.Unix.cs" />
+  </ItemGroup>
   <ItemGroup Condition="'$(TargetGroup)'=='netcoreapp'">
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\DSA\DSAKeyFileTests.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\DSA\DSAKeyFileTests.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\EC\ECKeyFileTests.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\EC\ECKeyFileTests.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDhKeyFileTests.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDhKeyFileTests.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanFactory.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanFactory.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Hash.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Hash.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Hmac.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Hmac.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.ImportExport.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.ImportExport.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.NistValidation.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.NistValidation.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Tls.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Tls.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Xml.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDiffieHellman\ECDiffieHellmanTests.Xml.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaKeyFileTests.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaKeyFileTests.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\RSA\RSAKeyFileTests.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\RSA\RSAKeyFileTests.cs</Link>
+    </Compile>
     <Compile Include="AesManagedTests.cs" />
     <Compile Include="AsymmetricSignatureFormatterTests.cs" />
     <Compile Include="BlockSizeValueTests.cs" />
     <Compile Include="CryptoConfigTests.cs" />
     <Compile Include="DefaultDSAProvider.cs" />
+    <Compile Include="DefaultECDiffieHellmanProvider.cs" />
     <Compile Include="DESProvider.cs" />
     <Compile Include="DESTests.cs" />
+    <Compile Include="DSACreateTests.cs" />
     <Compile Include="DSASignatureFormatterTests.cs" />
+    <Compile Include="DSATests.cs" />
+    <Compile Include="ECDiffieHellmanTests.cs" />
     <Compile Include="ECDiffieHellmanPublicKeyTests.cs" />
+    <Compile Include="ECDsaTests.cs" />
+    <Compile Include="HashAlgorithmTest.netcoreapp.cs" />
+    <Compile Include="IncrementalHashTests.netcoreapp.cs" />
     <Compile Include="PaddingModeTests.cs" />
     <Compile Include="PKCS1MaskGenerationMethodTest.cs" />
+    <Compile Include="RandomNumberGeneratorTests.netcoreapp.cs" />
     <Compile Include="RC2Provider.cs" />
     <Compile Include="RC2Tests.cs" />
     <Compile Include="RijndaelTests.cs" />
+    <Compile Include="RSATests.cs" />
+    <Compile Include="RSACreateTests.cs" />
     <Compile Include="RSAKeyExchangeFormatterTests.cs" />
     <Compile Include="RSASignatureFormatterTests.cs" />
     <Compile Include="Sha1ManagedTests.cs" />
@@ -190,6 +239,9 @@
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\DSA\DSAXml.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\DSA\DSAXml.cs</Link>
     </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaTests.netcoreapp.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaTests.netcoreapp.cs</Link>
+    </Compile>
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaXml.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\ECDsa\ECDsaXml.cs</Link>
     </Compile>
@@ -202,6 +254,9 @@
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\RC2\RC2Tests.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\RC2\RC2Tests.cs</Link>
     </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\RSA\EncryptDecrypt.netcoreapp.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\RSA\EncryptDecrypt.netcoreapp.cs</Link>
+    </Compile>
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\RSA\RSAKeyExchangeFormatter.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\RSA\RSAKeyExchangeFormatter.cs</Link>
     </Compile>
@@ -211,9 +266,16 @@
     <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\RSA\RSAXml.cs">
       <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\RSA\RSAXml.cs</Link>
     </Compile>
+    <Compile Include="$(CommonTestPath)\System\Security\Cryptography\AlgorithmImplementations\RSA\SignVerify.netcoreapp.cs">
+      <Link>CommonTest\System\Security\Cryptography\AlgorithmImplementations\RSA\SignVerify.netcoreapp.cs</Link>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetGroup)'=='netcoreapp'">
+    <Compile Include="AesAEADTests.cs" />
+    <Compile Include="AesCcmTests.cs" />
+    <Compile Include="AesGcmTests.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Common\Interop\Unix\" />
+    <EmbeddedResource Include="Resources\$(AssemblyName).rd.xml" />
   </ItemGroup>
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.targets))\dir.targets" />
 </Project>

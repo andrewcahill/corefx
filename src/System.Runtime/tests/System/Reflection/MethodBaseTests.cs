@@ -23,9 +23,9 @@ namespace System.Reflection.Tests
         }
 
         [Fact]
-        public static void Test_GetCurrentMethod_GenericMethod()
+        public static void Test_GetCurrentMethod_GenericMethodDefinition()
         {
-            MethodBase m = MyFakeGenericMethod<Byte>();
+            MethodBase m = MyFakeGenericMethod<byte>();
             
             Assert.Equal("MyFakeGenericMethod", m.Name);
             Assert.Equal("MethodBaseTests", m.ReflectedType.Name);
@@ -64,6 +64,7 @@ namespace System.Reflection.Tests
         }
 
         [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.UapAot, "MethodBase.GetMethodBody() not supported on UapAot")]
         public static void TestMethodBody()
         {
             MethodBase mbase = typeof(MethodBaseTests).GetMethod("MyOtherMethod", BindingFlags.Static | BindingFlags.Public);

@@ -9,7 +9,6 @@ using System.Diagnostics;
 
 namespace System.Xml.Xsl.XPath
 {
-
     // Extends XPathOperator enumeration
     internal enum LexKind
     {
@@ -605,7 +604,7 @@ namespace System.Xml.Xsl.XPath
             if (LexKind.LastNonChar < t)
             {
                 Debug.Assert("()[].@,*/$}".IndexOf((char)t) >= 0);
-                return new String((char)t, 1);
+                return char.ToString((char)t);
             }
 
             switch (t)

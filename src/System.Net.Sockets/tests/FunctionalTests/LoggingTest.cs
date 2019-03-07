@@ -12,7 +12,16 @@ namespace System.Net.Sockets.Tests
 {
     public class LoggingTest : RemoteExecutorTestBase
     {
+        public readonly ITestOutputHelper _output;
+
+        public LoggingTest(ITestOutputHelper output)
+        {
+            _output = output;
+        }
+
         [Fact]
+        [ActiveIssue(20470, TargetFrameworkMonikers.UapAot)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "NetEventSource is only part of .NET Core.")]
         public static void EventSource_ExistsWithCorrectId()
         {
             Type esType = typeof(Socket).Assembly.GetType("System.Net.NetEventSource", throwOnError: true, ignoreCase: false);
@@ -26,6 +35,8 @@ namespace System.Net.Sockets.Tests
 
         [OuterLoop]
         [Fact]
+        [ActiveIssue(20470, TargetFrameworkMonikers.UapAot)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "NetEventSource is only part of .NET Core.")]
         public void EventSource_EventsRaisedAsExpected()
         {
             RemoteInvoke(() =>
@@ -37,17 +48,17 @@ namespace System.Net.Sockets.Tests
                     {
                         // Invoke several tests to execute code paths while tracing is enabled
 
-                        new SendReceiveSync(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
-                        new SendReceiveSync(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
+                        new SendReceiveSync(null).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
+                        new SendReceiveSync(null).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
 
-                        new SendReceiveTask(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
-                        new SendReceiveTask(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
+                        new SendReceiveTask(null).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
+                        new SendReceiveTask(null).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
 
-                        new SendReceiveEap(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
-                        new SendReceiveEap(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
+                        new SendReceiveEap(null).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
+                        new SendReceiveEap(null).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
 
-                        new SendReceiveApm(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
-                        new SendReceiveApm(new NullTestOutputHelper()).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
+                        new SendReceiveApm(null).SendRecv_Stream_TCP(IPAddress.Loopback, false).GetAwaiter();
+                        new SendReceiveApm(null).SendRecv_Stream_TCP(IPAddress.Loopback, true).GetAwaiter();
 
                         new NetworkStreamTest().CopyToAsync_AllDataCopied(4096).GetAwaiter().GetResult();
                         new NetworkStreamTest().Timeout_ValidData_Roundtrips().GetAwaiter().GetResult();
@@ -57,12 +68,6 @@ namespace System.Net.Sockets.Tests
                 }
                 return SuccessExitCode;
             }).Dispose();
-        }
-
-        private sealed class NullTestOutputHelper : ITestOutputHelper
-        {
-            public void WriteLine(string message) { }
-            public void WriteLine(string format, params object[] args) { }
         }
     }
 }

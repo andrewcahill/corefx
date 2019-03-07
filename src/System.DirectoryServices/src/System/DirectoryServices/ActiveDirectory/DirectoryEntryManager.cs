@@ -2,51 +2,37 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+using System.ComponentModel;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Net;
-    using System.Collections;
-    using System.Globalization;
-    using System.ComponentModel;
-    using System.DirectoryServices;
-    using System.Runtime.InteropServices;
-    using System.Security.Permissions;
-
     /// <summary>
     /// Internal class that is used as a key in the hashtable
     /// of directory entries
     /// </summary>
     internal class DistinguishedName
     {
-        private Component[] _components = null;
-
         public DistinguishedName(string dn)
         {
-            _components = Utils.GetDNComponents(dn);
+            Components = Utils.GetDNComponents(dn);
         }
 
-        public Component[] Components
-        {
-            get
-            {
-                return _components;
-            }
-        }
+        public Component[] Components { get; }
 
         public bool Equals(DistinguishedName dn)
         {
             bool result = true;
-            if ((dn == null) || (_components.GetLength(0) != dn.Components.GetLength(0)))
+            if ((dn == null) || (Components.GetLength(0) != dn.Components.GetLength(0)))
             {
                 result = false;
             }
             else
             {
-                for (int i = 0; i < _components.GetLength(0); i++)
+                for (int i = 0; i < Components.GetLength(0); i++)
                 {
-                    if ((Utils.Compare(_components[i].Name, dn.Components[i].Name) != 0)
-                        || (Utils.Compare(_components[i].Value, dn.Components[i].Value) != 0))
+                    if ((Utils.Compare(Components[i].Name, dn.Components[i].Name) != 0)
+                        || (Utils.Compare(Components[i].Value, dn.Components[i].Value) != 0))
                     {
                         result = false;
                         break;
@@ -71,19 +57,19 @@ namespace System.DirectoryServices.ActiveDirectory
         public override int GetHashCode()
         {
             int hashCode = 0;
-            for (int i = 0; i < _components.GetLength(0); i++)
+            for (int i = 0; i < Components.GetLength(0); i++)
             {
-                hashCode = hashCode + _components[i].Name.ToUpperInvariant().GetHashCode() + _components[i].Value.ToUpperInvariant().GetHashCode();
+                hashCode = hashCode + Components[i].Name.ToUpperInvariant().GetHashCode() + Components[i].Value.ToUpperInvariant().GetHashCode();
             }
             return hashCode;
         }
 
         public override string ToString()
         {
-            string dn = _components[0].Name + "=" + _components[0].Value;
-            for (int i = 1; i < _components.GetLength(0); i++)
+            string dn = Components[0].Name + "=" + Components[0].Value;
+            for (int i = 1; i < Components.GetLength(0); i++)
             {
-                dn = dn + "," + _components[i].Name + "=" + _components[i].Value;
+                dn = dn + "," + Components[i].Name + "=" + Components[i].Value;
             }
             return dn;
         }
@@ -110,10 +96,7 @@ namespace System.DirectoryServices.ActiveDirectory
             _pathCracker.EscapedMode = NativeComInterfaces.ADS_ESCAPEDMODE_ON;
         }
 
-        internal ICollection GetCachedDirectoryEntries()
-        {
-            return _directoryEntries.Values;
-        }
+        internal ICollection GetCachedDirectoryEntries() => _directoryEntries.Values;
 
         internal DirectoryEntry GetCachedDirectoryEntry(WellKnownDN dn)
         {
@@ -123,10 +106,10 @@ namespace System.DirectoryServices.ActiveDirectory
         internal DirectoryEntry GetCachedDirectoryEntry(string distinguishedName)
         {
             // check if it's not RootDSE
-            Object dn = distinguishedName;
+            object dn = distinguishedName;
 
-            if ((String.Compare(distinguishedName, "rootdse", StringComparison.OrdinalIgnoreCase) != 0)
-            && (String.Compare(distinguishedName, "schema", StringComparison.OrdinalIgnoreCase) != 0))
+            if ((!string.Equals(distinguishedName, "rootdse", StringComparison.OrdinalIgnoreCase))
+            && (!string.Equals(distinguishedName, "schema", StringComparison.OrdinalIgnoreCase)))
             {
                 dn = new DistinguishedName(distinguishedName);
             }
@@ -145,7 +128,7 @@ namespace System.DirectoryServices.ActiveDirectory
         internal void RemoveIfExists(string distinguishedName)
         {
             // check if it's not RootDSE
-            Object dn = distinguishedName;
+            object dn = distinguishedName;
 
             //
             // NOTE: Currently only comparing against "rootdse", but in the future if we are going to 
@@ -153,7 +136,7 @@ namespace System.DirectoryServices.ActiveDirectory
             //           special casing here.
             //
 
-            if (String.Compare(distinguishedName, "rootdse", StringComparison.OrdinalIgnoreCase) != 0)
+            if (!string.Equals(distinguishedName, "rootdse", StringComparison.OrdinalIgnoreCase))
             {
                 dn = new DistinguishedName(distinguishedName);
             }
@@ -245,7 +228,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     }
                 default:
                     // should not happen
-                    throw new InvalidEnumArgumentException("dn", (int)dn, typeof(WellKnownDN));
+                    throw new InvalidEnumArgumentException(nameof(dn), (int)dn, typeof(WellKnownDN));
             }
             return distinguishedName;
         }
@@ -281,7 +264,7 @@ namespace System.DirectoryServices.ActiveDirectory
             // use ServerBind flag is the target is a server and the ServerBind option is supported
             //
 
-            if (DirectoryContext.ServerBindSupported && useServerBind)
+            if (useServerBind)
             {
                 authType |= AuthenticationTypes.ServerBind;
             }
@@ -381,7 +364,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     }
                 default:
                     // should not happen
-                    throw new InvalidEnumArgumentException("dn", (int)dn, typeof(WellKnownDN));
+                    throw new InvalidEnumArgumentException(nameof(dn), (int)dn, typeof(WellKnownDN));
             }
             return distinguishedName;
         }

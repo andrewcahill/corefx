@@ -2,16 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Text;
+using System.Collections;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Text;
-    using System.Collections;
-    using System.ComponentModel;
-    using System.Runtime.InteropServices;
-    using System.Security.Permissions;
-    using System.Globalization;
-
     public enum SchemaClassType : int
     {
         Type88 = 0,
@@ -92,7 +89,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             // contexttype should be Forest, DirectoryServer or ConfigurationSet
@@ -100,7 +97,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 (context.ContextType != DirectoryContextType.ConfigurationSet) &&
                 (context.ContextType != DirectoryContextType.DirectoryServer))
             {
-                throw new ArgumentException(SR.NotADOrADAM, "context");
+                throw new ArgumentException(SR.NotADOrADAM, nameof(context));
             }
 
             if ((context.Name == null) && (!context.isRootDomain()))
@@ -123,7 +120,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     }
                     else
                     {
-                        throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.ServerNotFound , context.Name), typeof(ActiveDirectorySchema), null);
+                        throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.ServerNotFound , context.Name), typeof(ActiveDirectorySchema), null);
                     }
                 }
             }
@@ -139,7 +136,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
                 if ((context.isServer()) && (!Utils.CheckCapability(rootDSE, Capability.ActiveDirectoryOrADAM)))
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.ServerNotFound , context.Name), typeof(ActiveDirectorySchema), null);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.ServerNotFound , context.Name), typeof(ActiveDirectorySchema), null);
                 }
 
                 schemaNC = (string)PropertyManager.GetPropertyValue(context, rootDSE, PropertyManager.SchemaNamingContext);
@@ -160,7 +157,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     }
                     else
                     {
-                        throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.ServerNotFound , context.Name), typeof(ActiveDirectorySchema), null);
+                        throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.ServerNotFound , context.Name), typeof(ActiveDirectorySchema), null);
                     }
                 }
                 else
@@ -233,12 +230,12 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (commonName == null)
             {
-                throw new ArgumentNullException("commonName");
+                throw new ArgumentNullException(nameof(commonName));
             }
 
             if (commonName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "commonName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(commonName));
             }
 
             // this will bind to the schema container and load the properties of this class
@@ -270,7 +267,7 @@ namespace System.DirectoryServices.ActiveDirectory
             // validate the type
             if (type < SchemaClassType.Type88 || type > SchemaClassType.Auxiliary)
             {
-                throw new InvalidEnumArgumentException("type", (int)type, typeof(SchemaClassType));
+                throw new InvalidEnumArgumentException(nameof(type), (int)type, typeof(SchemaClassType));
             }
 
             string filter = "(&(" + PropertyManager.ObjectCategory + "=classSchema)" +
@@ -309,12 +306,12 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (commonName == null)
             {
-                throw new ArgumentNullException("commonName");
+                throw new ArgumentNullException(nameof(commonName));
             }
 
             if (commonName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "commonName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(commonName));
             }
 
             // this will bind to the schema container and load the properties of this property
@@ -347,7 +344,7 @@ namespace System.DirectoryServices.ActiveDirectory
             // check validity of type
             if ((type & (~(PropertyTypes.Indexed | PropertyTypes.InGlobalCatalog))) != 0)
             {
-                throw new ArgumentException(SR.InvalidFlags, "type");
+                throw new ArgumentException(SR.InvalidFlags, nameof(type));
             }
 
             // start the filter

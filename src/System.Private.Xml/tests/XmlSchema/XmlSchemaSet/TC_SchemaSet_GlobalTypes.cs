@@ -22,8 +22,8 @@ namespace System.Xml.Tests
 
         public XmlSchema GetSchema(string ns, string type1, string type2)
         {
-            string xsd = String.Empty;
-            if (ns.Equals(String.Empty))
+            string xsd = string.Empty;
+            if (ns.Equals(string.Empty))
                 xsd = "<schema xmlns='http://www.w3.org/2001/XMLSchema'><complexType name='" + type1 + "'><sequence><element name='local'/></sequence></complexType><simpleType name='" + type2 + "'><restriction base='int'/></simpleType></schema>";
             else
                 xsd = "<schema xmlns='http://www.w3.org/2001/XMLSchema' targetNamespace='" + ns + "'><complexType name='" + type1 + "'><sequence><element name='local'/></sequence></complexType><simpleType name='" + type2 + "'><restriction base='int'/></simpleType></schema>";
@@ -269,6 +269,3 @@ namespace System.Xml.Tests
         }
     }
 }
-
-//todo: add sanity test for include
-//todo: copy count checks from element

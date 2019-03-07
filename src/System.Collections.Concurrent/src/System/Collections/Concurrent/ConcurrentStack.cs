@@ -12,7 +12,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.Serialization;
 using System.Threading;
 
 namespace System.Collections.Concurrent
@@ -37,13 +36,11 @@ namespace System.Collections.Concurrent
     /// </remarks>
     [DebuggerDisplay("Count = {Count}")]
     [DebuggerTypeProxy(typeof(IProducerConsumerCollectionDebugView<>))]
-    [Serializable]
     public class ConcurrentStack<T> : IProducerConsumerCollection<T>, IReadOnlyCollection<T>
     {
         /// <summary>
         /// A simple (internal) node type used to store elements of concurrent stacks and queues.
         /// </summary>
-        [Serializable]
         private class Node
         {
             internal readonly T _value; // Value of the node.
@@ -60,12 +57,8 @@ namespace System.Collections.Concurrent
             }
         }
 
-        [NonSerialized]
         private volatile Node _head; // The stack is a singly linked list, and only remembers the head.
-
         private const int BACKOFF_MAX_YIELDS = 8; // Arbitrary number to cap backoff.
-
-        private T[] _serializationArray; // Used for custom serialization
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConcurrentStack{T}"/>
@@ -90,45 +83,6 @@ namespace System.Collections.Concurrent
                 throw new ArgumentNullException(nameof(collection));
             }
             InitializeFromCollection(collection);
-        }
-
-        /// <summary>Get the data array to be serialized.</summary>
-        [OnSerializing]
-        private void OnSerializing(StreamingContext context)
-        {
-            // save the data into the serialization array to be saved
-            _serializationArray = ToArray();
-        }
-
-        /// <summary>
-        /// Construct the stack from a previously seiralized one
-        /// </summary>
-        [OnDeserialized]
-        private void OnDeserialized(StreamingContext context)
-        {
-            Debug.Assert(_serializationArray != null);
-
-            // Add the elements to our stack.  We need to add them from head-to-tail, to
-            // preserve the original ordering of the stack before serialization.
-            Node prevNode = null, head = null;
-            for (int i = 0; i < _serializationArray.Length; i++)
-            {
-                Node currNode = new Node(_serializationArray[i]);
-
-                if (prevNode == null)
-                {
-                    head = currNode;
-                }
-                else
-                {
-                    prevNode._next = currNode;
-                }
-
-                prevNode = currNode;
-            }
-
-            _head = head;
-            _serializationArray = null;
         }
 
         /// <summary>
@@ -319,7 +273,6 @@ namespace System.Collections.Concurrent
             ToList().CopyTo(array, index);
         }
 
-#pragma warning disable 0420 // No warning for Interlocked.xxx if compiled with new managed compiler (Roslyn)
         /// <summary>
         /// Inserts an object at the top of the <see cref="ConcurrentStack{T}"/>.
         /// </summary>
@@ -430,7 +383,7 @@ namespace System.Collections.Concurrent
             // Keep trying to CAS the existing head with the new node until we succeed.
             do
             {
-                spin.SpinOnce();
+                spin.SpinOnce(sleep1Threshold: -1);
                 // Reread the head and link our new node.
                 tail._next = _head;
             }
@@ -691,7 +644,7 @@ namespace System.Collections.Concurrent
                 // We failed to CAS the new head.  Spin briefly and retry.
                 for (int i = 0; i < backoff; i++)
                 {
-                    spin.SpinOnce();
+                    spin.SpinOnce(sleep1Threshold: -1);
                 }
 
                 if (spin.NextSpinWillYield)
@@ -708,7 +661,6 @@ namespace System.Collections.Concurrent
                 }
             }
         }
-#pragma warning restore 0420
 
         /// <summary>
         /// Local helper function to copy the popped elements into a given collection
@@ -791,7 +743,7 @@ namespace System.Collections.Concurrent
         /// <remarks>
         /// The enumeration represents a moment-in-time snapshot of the contents
         /// of the stack.  It does not reflect any updates to the collection after 
-        /// <see cref="GetEnumerator"/> was called.  The enumerator is safe to use
+        /// <see cref="GetEnumerator()"/> was called.  The enumerator is safe to use
         /// concurrently with reads from and writes to the stack.
         /// </remarks>
         public IEnumerator<T> GetEnumerator()
@@ -825,7 +777,7 @@ namespace System.Collections.Concurrent
         /// <remarks>
         /// The enumeration represents a moment-in-time snapshot of the contents of the stack. It does not
         /// reflect any updates to the collection after
-        /// <see cref="GetEnumerator"/> was called. The enumerator is safe to use concurrently with reads
+        /// <see cref="GetEnumerator()"/> was called. The enumerator is safe to use concurrently with reads
         /// from and writes to the stack.
         /// </remarks>
         IEnumerator IEnumerable.GetEnumerator()

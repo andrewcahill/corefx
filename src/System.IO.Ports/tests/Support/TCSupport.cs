@@ -22,7 +22,7 @@ namespace Legacy.Support
         private static SerialPortRequirements s_localMachineSerialPortRequirements;
 
         // Set this true to display port info to the console rather than Debug.WriteLine
-        private static bool s_displayPortInfoOnConsole = false;
+        private static bool s_displayPortInfoOnConsole = true;
 
         static TCSupport()
         {
@@ -32,6 +32,12 @@ namespace Legacy.Support
 
         private static void InitializeSerialInfo()
         {
+            if (PlatformDetection.IsWindowsNanoServer)
+            {
+                s_localMachineSerialPortRequirements = SerialPortRequirements.None;
+                return;
+            }
+
             GenerateSerialInfo();
 
             if (s_localMachineSerialInfo.LoopbackPortName != null)
@@ -100,7 +106,7 @@ namespace Legacy.Support
                 portName2 = openablePortNames.FirstOrDefault(name => name != portName1);
             }
 
-            // See Github issue #15961 and #16033 - hardware tests are currently insufficiently stable on master CI
+            // See Github issues #15961, #16033, #20764 - hardware tests are currently insufficiently stable on master CI
             if (loopbackPortName == null && !nullModemPresent)
             {
                 // We don't have any supporting hardware - disable all the tests which would use just an open port
@@ -118,7 +124,14 @@ namespace Legacy.Support
             if (portName1 != null)
             {
                 // Measure how big a packet we need to write to be sure to see blocking behaviour at a port
-                s_flowControlCapabilities = SerialPortConnection.MeasureFlowControlCapabilities(portName1);
+                try
+                {
+                    s_flowControlCapabilities = SerialPortConnection.MeasureFlowControlCapabilities(portName1);
+                }
+                catch (Exception e)
+                {
+                    PrintInfo(e.ToString());
+                }
 
                 PrintInfo("{0}: Flow capabilities {1}", portName1, s_flowControlCapabilities);
             }
@@ -150,8 +163,10 @@ namespace Legacy.Support
 
                         openablePortNames.Add(portName);
                     }
-                    catch (Exception)
+                    catch (UnauthorizedAccessException) { }
+                    catch (Exception e)
                     {
+                        PrintInfo("Exception opening port {0}: {1}", portName, e);
                     }
                 }
             }
@@ -643,7 +658,6 @@ namespace Legacy.Support
                 Assert.True(sw.ElapsedMilliseconds < 3000, $"Timeout while waiting for data to be arrive at port (expected {bufferLength}, available {com.BytesToRead})");
             }
         }
-
 
         public static void WaitForTaskToStart(Task task)
         {

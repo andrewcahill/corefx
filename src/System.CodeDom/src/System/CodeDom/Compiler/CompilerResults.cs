@@ -7,32 +7,16 @@ using System.Reflection;
 
 namespace System.CodeDom.Compiler
 {
-    [Serializable]
     public partial class CompilerResults
     {
-        private readonly CompilerErrorCollection _errors = new CompilerErrorCollection();
-        private readonly StringCollection _output = new StringCollection();
         private Assembly _compiledAssembly;
-
-        [NonSerialized]
-        private TempFileCollection _tempFiles;
 
         public CompilerResults(TempFileCollection tempFiles)
         {
-            _tempFiles = tempFiles;
+            TempFiles = tempFiles;
         }
 
-        public TempFileCollection TempFiles
-        {
-            get
-            {
-                return _tempFiles;
-            }
-            set
-            {
-                _tempFiles = value;
-            }
-        }
+        public TempFileCollection TempFiles { get; set; }
 
         public Assembly CompiledAssembly
         {
@@ -44,13 +28,12 @@ namespace System.CodeDom.Compiler
                 }
                 return _compiledAssembly;
             }
-            set { _compiledAssembly = value; }
+            set => _compiledAssembly = value;
         }
 
-        public CompilerErrorCollection Errors => _errors;
+        public CompilerErrorCollection Errors { get; } = new CompilerErrorCollection();
 
-        public StringCollection Output => _output;
-
+        public StringCollection Output { get; } = new StringCollection();
         public string PathToAssembly { get; set; }
 
         public int NativeCompilerReturnValue { get; set; }

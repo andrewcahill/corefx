@@ -31,34 +31,26 @@ namespace System.Linq.Expressions.Interpreter
 
     internal sealed class ExceptionHandler
     {
-        public readonly Type ExceptionType;
+        private readonly Type _exceptionType;
         public readonly int LabelIndex;
         public readonly int HandlerStartIndex;
         public readonly int HandlerEndIndex;
         public readonly ExceptionFilter Filter;
 
-        internal TryCatchFinallyHandler Parent = null;
-
         internal ExceptionHandler(int labelIndex, int handlerStartIndex, int handlerEndIndex, Type exceptionType, ExceptionFilter filter)
         {
             Debug.Assert(exceptionType != null);
             LabelIndex = labelIndex;
-            ExceptionType = exceptionType;
+            _exceptionType = exceptionType;
             HandlerStartIndex = handlerStartIndex;
             HandlerEndIndex = handlerEndIndex;
             Filter = filter;
         }
 
-        internal void SetParent(TryCatchFinallyHandler tryHandler)
-        {
-            Debug.Assert(Parent == null);
-            Parent = tryHandler;
-        }
-
-        public bool Matches(Type exceptionType) => ExceptionType.IsAssignableFrom(exceptionType);
+        public bool Matches(Type exceptionType) => _exceptionType.IsAssignableFrom(exceptionType);
 
         public override string ToString() =>
-            string.Format(CultureInfo.InvariantCulture, "catch({0}) [{1}->{2}]", ExceptionType.Name, HandlerStartIndex, HandlerEndIndex);
+            string.Format(CultureInfo.InvariantCulture, "catch({0}) [{1}->{2}]", _exceptionType.Name, HandlerStartIndex, HandlerEndIndex);
     }
 
     internal sealed class TryCatchFinallyHandler
@@ -103,16 +95,7 @@ namespace System.Linq.Expressions.Interpreter
             FinallyStartIndex = finallyStart;
             FinallyEndIndex = finallyEnd;
             GotoEndTargetIndex = gotoEndLabelIndex;
-
             _handlers = handlers;
-
-            if (_handlers != null)
-            {
-                foreach (ExceptionHandler handler in _handlers)
-                {
-                    handler.SetParent(this);
-                }
-            }
         }
 
         internal bool HasHandler(InterpretedFrame frame, Exception exception, out ExceptionHandler handler, out object unwrappedException)
@@ -135,9 +118,8 @@ namespace System.Linq.Expressions.Interpreter
                 RuntimeWrappedException rwe = exception as RuntimeWrappedException;
                 unwrappedException = rwe != null ? rwe.WrappedException : exception;
                 Type exceptionType = unwrappedException.GetType();
-                for (int i = 0; i != _handlers.Length; ++i)
+                foreach (ExceptionHandler candidate in _handlers)
                 {
-                    ExceptionHandler candidate = _handlers[i];
                     if (candidate.Matches(exceptionType) && (candidate.Filter == null || FilterPasses(frame, ref unwrappedException, candidate.Filter)))
                     {
                         handler = candidate;
@@ -154,35 +136,42 @@ namespace System.Linq.Expressions.Interpreter
             return false;
         }
 
-        internal bool FilterPasses(InterpretedFrame frame, ref object exception, ExceptionFilter filter)
+        private static bool FilterPasses(InterpretedFrame frame, ref object exception, ExceptionFilter filter)
         {
             Interpreter interpreter = frame.Interpreter;
             Instruction[] instructions = interpreter.Instructions.Instructions;
             int stackIndex = frame.StackIndex;
+            int frameIndex = frame.InstructionIndex;
             try
             {
                 int index = interpreter._labels[filter.LabelIndex].Index;
+                frame.InstructionIndex = index;
                 frame.Push(exception);
                 while (index >= filter.StartIndex && index < filter.EndIndex)
                 {
                     index += instructions[index].Run(frame);
+                    frame.InstructionIndex = index;
                 }
 
+                // Exception is stored in a local at start of the filter, and loaded from it at the end, so it is now
+                // on the top of the stack. It may have been assigned to in the course of the filter running.
+                // If this is the handler that will be executed, then if the filter has assigned to the exception variable
+                // that change should be visible to the handler. Otherwise, it should not, so we write it back only on true.
+                object exceptionLocal = frame.Pop();
                 if ((bool)frame.Pop())
                 {
-                    // If this is the handler that will be executed, then if the filter has assigned to the exception variable
-                    // that change should be visible to the handler. Otherwise, it should not.
-                    exception = (Exception)frame.Peek();
+                    exception = exceptionLocal;
+                    // Stack and instruction indices will be overwritten in the catch block anyway, so no need to restore.
                     return true;
                 }
             }
             catch
             {
                 // Silently eating exceptions and returning false matches the CLR behavior.
-                // Restore stack depth first.
-                frame.StackIndex = stackIndex;
             }
 
+            frame.StackIndex = stackIndex;
+            frame.InstructionIndex = frameIndex;
             return false;
         }
     }
@@ -267,7 +256,7 @@ namespace System.Linq.Expressions.Interpreter
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1815:OverrideEqualsAndOperatorEqualsOnValueTypes")]
-    internal struct InterpretedFrameInfo
+    internal readonly struct InterpretedFrameInfo
     {
         private readonly string _methodName;
 
@@ -316,6 +305,8 @@ namespace System.Linq.Expressions.Interpreter
 
         public LightDelegateCreator CompileTop(LambdaExpression node)
         {
+            node.ValidateArgumentCount();
+
             //Console.WriteLine(node.DebugView);
             for (int i = 0, n = node.ParameterCount; i < n; i++)
             {
@@ -362,7 +353,11 @@ namespace System.Linq.Expressions.Interpreter
         {
             if (type != typeof(void))
             {
-                if (type.IsValueType)
+                if (type.IsNullableOrReferenceType())
+                {
+                    _instructions.EmitLoad(value: null);
+                }
+                else
                 {
                     object value = ScriptingRuntimeHelpers.GetPrimitiveDefaultValue(type);
                     if (value != null)
@@ -373,10 +368,6 @@ namespace System.Linq.Expressions.Interpreter
                     {
                         _instructions.EmitDefaultValue(type);
                     }
-                }
-                else
-                {
-                    _instructions.EmitLoad(value: null);
                 }
             }
         }
@@ -1047,13 +1038,35 @@ namespace System.Linq.Expressions.Interpreter
             {
                 BranchLabel end = _instructions.MakeLabel();
                 BranchLabel loadDefault = _instructions.MakeLabel();
+                MethodInfo method = node.Method;
+                ParameterInfo[] parameters = method.GetParametersCached();
+                Debug.Assert(parameters.Length == 1);
+                ParameterInfo parameter = parameters[0];
+                Expression operand = node.Operand;
+                Type operandType = operand.Type;
+                LocalDefinition opTemp = _locals.DefineLocal(Expression.Parameter(operandType), _instructions.Count);
+                ByRefUpdater updater = null;
+                Type parameterType = parameter.ParameterType;
+                if (parameterType.IsByRef)
+                {
+                    if (node.IsLifted)
+                    {
+                        Compile(node.Operand);
+                    }
+                    else
+                    {
+                        updater = CompileAddress(node.Operand, 0);
+                        parameterType = parameterType.GetElementType();
+                    }
+                }
+                else
+                {
+                    Compile(node.Operand);
+                }
 
-                LocalDefinition opTemp = _locals.DefineLocal(Expression.Parameter(node.Operand.Type), _instructions.Count);
-                Compile(node.Operand);
                 _instructions.EmitStoreLocal(opTemp.Index);
 
-                if (!node.Operand.Type.IsValueType ||
-                    (node.Operand.Type.IsNullableType() && node.IsLiftedToNull))
+                if (!operandType.IsValueType || operandType.IsNullableType() && node.IsLiftedToNull)
                 {
                     _instructions.EmitLoadLocal(opTemp.Index);
                     _instructions.EmitLoad(null, typeof(object));
@@ -1062,13 +1075,20 @@ namespace System.Linq.Expressions.Interpreter
                 }
 
                 _instructions.EmitLoadLocal(opTemp.Index);
-                if (node.Operand.Type.IsNullableType() &&
-                    node.Method.GetParametersCached()[0].ParameterType.Equals(node.Operand.Type.GetNonNullableType()))
+                if (operandType.IsNullableType() && parameterType.Equals(operandType.GetNonNullableType()))
                 {
                     _instructions.Emit(NullableMethodCallInstruction.CreateGetValue());
                 }
 
-                _instructions.EmitCall(node.Method);
+                if (updater == null)
+                {
+                    _instructions.EmitCall(method);
+                }
+                else
+                {
+                    _instructions.EmitByRefCall(method, parameters, new[] {updater});
+                    updater.UndefineTemps(_instructions, _locals);
+                }
 
                 _instructions.EmitBranch(end, hasResult: false, hasValue: true);
 
@@ -1633,10 +1653,7 @@ namespace System.Linq.Expressions.Interpreter
                 foreach (ConstantExpression testValue in switchCase.TestValues)
                 {
                     var key = (T)testValue.Value;
-                    if (!caseDict.ContainsKey(key))
-                    {
-                        caseDict.Add(key, caseOffset);
-                    }
+                    caseDict.TryAdd(key, caseOffset);
                 }
 
                 Compile(switchCase.Body, !hasValue);
@@ -1687,9 +1704,9 @@ namespace System.Linq.Expressions.Interpreter
                             nullCase.Value = caseOffset;
                         }
                     }
-                    else if (!caseDict.ContainsKey(key))
+                    else
                     {
-                        caseDict.Add(key, caseOffset);
+                        caseDict.TryAdd(key, caseOffset);
                     }
                 }
 
@@ -1958,7 +1975,6 @@ namespace System.Linq.Expressions.Interpreter
             }
             else
             {
-
                 BranchLabel end = _instructions.MakeLabel();
                 BranchLabel gotoEnd = _instructions.MakeLabel();
                 int tryStart = _instructions.Count;
@@ -2014,6 +2030,7 @@ namespace System.Linq.Expressions.Interpreter
 
                             CompileSetVariable(parameter, isVoid: true);
                             Compile(handler.Filter);
+                            CompileGetVariable(parameter);
 
                             filter = new ExceptionFilter(filterLabel, filterStart, _instructions.Count);
 
@@ -2226,9 +2243,9 @@ namespace System.Linq.Expressions.Interpreter
                         return ((IndexExpression)node).Object.Type.IsArray;
                     case ExpressionType.MemberAccess:
                         return ((MemberExpression)node).Member is FieldInfo;
-                    // ExpressionType.Unbox does have the behaviour write-back is used to simulate, but
-                    // it doesn't need explicit write-back to produce it, so include it in the default
-                    // false cases.
+                        // ExpressionType.Unbox does have the behaviour write-back is used to simulate, but
+                        // it doesn't need explicit write-back to produce it, so include it in the default
+                        // false cases.
                 }
             }
             return false;
@@ -2416,8 +2433,16 @@ namespace System.Linq.Expressions.Interpreter
             }
             else
             {
-                Debug.Assert(node.Type.IsValueType);
-                _instructions.EmitDefaultValue(node.Type);
+                Type type = node.Type;
+                Debug.Assert(type.IsValueType);
+                if (type.IsNullableType())
+                {
+                    _instructions.EmitLoad(value: null);
+                }
+                else
+                {
+                    _instructions.EmitDefaultValue(type);
+                }
             }
         }
 
@@ -2584,8 +2609,13 @@ namespace System.Linq.Expressions.Interpreter
                 // nullable value types with implicit (numeric) conversions which are allowed by Coalesce
                 // factory methods
 
-                Type nnLeftType = node.Left.Type.GetNonNullableType();
-                if (!TypeUtils.AreEquivalent(node.Type, nnLeftType))
+                Type typeToCompare = node.Left.Type;
+                if (!node.Type.IsNullableType())
+                {
+                    typeToCompare = typeToCompare.GetNonNullableType();
+                }
+
+                if (!TypeUtils.AreEquivalent(node.Type, typeToCompare))
                 {
                     hasImplicitConversion = true;
                     hasConversion = true;
@@ -2606,6 +2636,12 @@ namespace System.Linq.Expressions.Interpreter
                 end = _instructions.MakeLabel();
                 _instructions.EmitBranch(end);
             }
+            else if (node.Right.Type.IsValueType && !TypeUtils.AreEquivalent(node.Type, node.Right.Type))
+            {
+                // The right hand side may need to be widened to either the left hand side's type
+                // if the right hand side is nullable, or the left hand side's underlying type otherwise
+                CompileConvertToType(node.Right.Type, node.Type, isChecked: true, isLiftedToNull: node.Type.IsNullableType());
+            }
 
             _instructions.MarkLabel(leftNotNull);
 
@@ -2616,7 +2652,7 @@ namespace System.Linq.Expressions.Interpreter
                 _instructions.EmitStoreLocal(local.Index);
 
                 CompileMethodCallExpression(
-                    Expression.Call(node.Conversion, node.Conversion.Type.GetMethod("Invoke"), new[] { temp })
+                    Expression.Call(node.Conversion, node.Conversion.Type.GetInvokeMethod(), new[] { temp })
                 );
 
                 _locals.UndefineLocal(local, _instructions.Count);
@@ -2645,14 +2681,14 @@ namespace System.Linq.Expressions.Interpreter
                         node.Expression,
                         compMethod
                     ),
-                    compMethod.ReturnType.GetMethod("Invoke"),
+                    compMethod.ReturnType.GetInvokeMethod(),
                     node
                 );
             }
             else
             {
                 CompileMethodCallExpression(
-                    node.Expression, node.Expression.Type.GetMethod("Invoke"), node
+                    node.Expression, node.Expression.Type.GetInvokeMethod(), node
                 );
             }
         }

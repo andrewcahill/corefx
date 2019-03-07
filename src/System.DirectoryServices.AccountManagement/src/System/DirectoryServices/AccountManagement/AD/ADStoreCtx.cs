@@ -10,7 +10,6 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Net;
 using System.Security.Principal;
-using System.Security.Permissions;
 using System.Collections.Specialized;
 using System.DirectoryServices;
 using System.Text;
@@ -290,7 +289,7 @@ namespace System.DirectoryServices.AccountManagement
 
             // This will also detect if the server is down or nonexistent
             if (!IsContainer(ctxBase))
-                throw new InvalidOperationException(StringResources.ADStoreCtxMustBeContainer);
+                throw new InvalidOperationException(SR.ADStoreCtxMustBeContainer);
 
             this.ctxBase = ctxBase;
             _ownCtxBase = ownCtxBase;
@@ -458,7 +457,7 @@ namespace System.DirectoryServices.AccountManagement
 
         /// <summary>
         /// If The enabled property was set on the principal then perform actions 
-        /// neccessary on the principal to set the enabled status to match
+        /// necessary on the principal to set the enabled status to match
         /// the set value.
         /// </summary>
         /// <param name="p"></param>
@@ -627,7 +626,7 @@ namespace System.DirectoryServices.AccountManagement
                     GlobalDebug.WriteLineIf(GlobalDebug.Warn, "ADStoreCtx", "SetAuthPrincipalEnableStatus: can't read userAccountControl");
 
                     throw new PrincipalOperationException(
-                                StringResources.ADStoreCtxUnableToReadExistingAccountControlFlagsToEnable);
+                                SR.ADStoreCtxUnableToReadExistingAccountControlFlagsToEnable);
                 }
 
                 if (enable && ((uacValue & 0x2) != 0))
@@ -728,7 +727,7 @@ namespace System.DirectoryServices.AccountManagement
 
             if (null == rdnPrefix)
             {
-                throw new InvalidOperationException(StringResources.ExtensionInvalidClassAttributes);
+                throw new InvalidOperationException(SR.ExtensionInvalidClassAttributes);
             }
 
             if (p.GetChangeStatusForProperty(PropertyNames.PrincipalName))
@@ -747,7 +746,7 @@ namespace System.DirectoryServices.AccountManagement
                     (DirectoryRdnPrefixAttribute[])Attribute.GetCustomAttributes(principalType.BaseType, typeof(DirectoryRdnPrefixAttribute), false);
 
                     if (MyAttribute == null)
-                        throw new InvalidOperationException(StringResources.ExtensionInvalidClassAttributes);
+                        throw new InvalidOperationException(SR.ExtensionInvalidClassAttributes);
 
                     string defaultRdn = null;
 
@@ -821,7 +820,7 @@ namespace System.DirectoryServices.AccountManagement
         /// just check bit 0x0010.  On DL platforms this attribute does not exist so we must read lockoutTime and return locked if
         /// this is greater than 0
         /// </summary>
-        /// <param name="p">Princiapl to check status</param>
+        /// <param name="p">Principal to check status</param>
         /// <returns>true is account is locked, false if not</returns>
         internal override bool IsLockedOut(AuthenticablePrincipal p)
         {
@@ -896,7 +895,7 @@ namespace System.DirectoryServices.AccountManagement
 
         // methods for manipulating passwords
         /// <summary>
-        /// Set the password on the principal. This function requires administrator privilages
+        /// Set the password on the principal. This function requires administrator privileges
         /// </summary>
         /// <param name="p">Principal to modify</param>
         /// <param name="newPassword">New password</param>
@@ -933,7 +932,7 @@ namespace System.DirectoryServices.AccountManagement
             if ((p.GetType() == typeof(ComputerPrincipal)) || (p.GetType().IsSubclassOf(typeof(ComputerPrincipal))))
             {
                 GlobalDebug.WriteLineIf(GlobalDebug.Error, "ADStoreCtx", "ChangePassword: computer acct, can't change password.");
-                throw new NotSupportedException(StringResources.ADStoreCtxNoComputerPasswordChange);
+                throw new NotSupportedException(SR.ADStoreCtxNoComputerPasswordChange);
             }
 
             DirectoryEntry de = (DirectoryEntry)p.UnderlyingObject;
@@ -1208,7 +1207,7 @@ namespace System.DirectoryServices.AccountManagement
                         var gg = forest.FindAllGlobalCatalogs(dd.SiteName);
                         foreach (GlobalCatalog g in gg)
                         {
-                            if (0 == string.Compare(this.DnsDomainName, g.Domain.Name, StringComparison.OrdinalIgnoreCase))
+                            if (string.Equals(this.DnsDomainName, g.Domain.Name, StringComparison.OrdinalIgnoreCase))
                             {
                                 gc = g;
                                 break;
@@ -1217,7 +1216,7 @@ namespace System.DirectoryServices.AccountManagement
 
                         roots.Add(new DirectoryEntry("GC://" + gc.Name + "/" + p.DistinguishedName, this.credentials != null ? this.credentials.UserName : null, this.credentials != null ? this.credentials.Password : null, this.AuthTypes));
 
-                        if (0 != string.Compare(this.DnsDomainName, gc.Domain.Name, StringComparison.OrdinalIgnoreCase))
+                        if (!string.Equals(this.DnsDomainName, gc.Domain.Name, StringComparison.OrdinalIgnoreCase))
                         {
                             //useASQ = false;
                             roots.Add(principalDE);
@@ -1384,7 +1383,7 @@ namespace System.DirectoryServices.AccountManagement
             SecurityIdentifier Sid = foreignPrincipal.Sid;
 
             if (Sid == null)
-                throw new InvalidOperationException(StringResources.StoreCtxNeedValueSecurityIdentityClaimToQuery);
+                throw new InvalidOperationException(SR.StoreCtxNeedValueSecurityIdentityClaimToQuery);
 
             // Search our store for a object with a matching SID.  This could be a user/group/computer object,
             // or a foreignSecurityPrincipal.  Doesn't really matter --- either way, the store object will have a objectSid
@@ -1409,9 +1408,9 @@ namespace System.DirectoryServices.AccountManagement
 
                 // If same forest but different domain then we have a child or alternate tree domain.  We don't have a starting user
                 // object and must do a search on all groups to find membership.
-                if (0 == string.Compare(foreignADStore.DnsForestName, this.DnsForestName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(foreignADStore.DnsForestName, this.DnsForestName, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (0 == string.Compare(foreignADStore.DnsDomainName, this.DnsDomainName, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(foreignADStore.DnsDomainName, this.DnsDomainName, StringComparison.OrdinalIgnoreCase))
                     {
                         rootPrincipalExists = true;
                     }
@@ -1457,7 +1456,7 @@ namespace System.DirectoryServices.AccountManagement
                     // Converr the object to a SDDL format
                     string stringSid = Utils.SecurityIdentifierToLdapHexFilterString(Sid);
                     if (stringSid == null)
-                        throw new InvalidOperationException(StringResources.StoreCtxNeedValueSecurityIdentityClaimToQuery);
+                        throw new InvalidOperationException(SR.StoreCtxNeedValueSecurityIdentityClaimToQuery);
 
                     ds.Filter = "(objectSid=" + stringSid + ")";
 
@@ -1607,7 +1606,7 @@ namespace System.DirectoryServices.AccountManagement
             if (SidObj == null)
             {
                 GlobalDebug.WriteLineIf(GlobalDebug.Warn, "ADStoreCtx", "GetGroupsMemberOfAZ: no SID IC");
-                throw new InvalidOperationException(StringResources.StoreCtxNeedValueSecurityIdentityClaimToQuery);
+                throw new InvalidOperationException(SR.StoreCtxNeedValueSecurityIdentityClaimToQuery);
             }
 
             byte[] sid = new byte[SidObj.BinaryLength];
@@ -1616,7 +1615,7 @@ namespace System.DirectoryServices.AccountManagement
             if (sid == null)
             {
                 GlobalDebug.WriteLineIf(GlobalDebug.Warn, "ADStoreCtx", "GetGroupsMemberOfAZ: bad SID IC");
-                throw new ArgumentException(StringResources.StoreCtxSecurityIdentityClaimBadFormat);
+                throw new ArgumentException(SR.StoreCtxSecurityIdentityClaimBadFormat);
             }
 
             try
@@ -1820,17 +1819,17 @@ namespace System.DirectoryServices.AccountManagement
             if (Sid == null)
             {
                 GlobalDebug.WriteLineIf(GlobalDebug.Warn, "ADStoreCtx", "IsMemberOfInStore: no SID IC or null UrnValue");
-                throw new ArgumentException(StringResources.StoreCtxNeedValueSecurityIdentityClaimToQuery);
+                throw new ArgumentException(SR.StoreCtxNeedValueSecurityIdentityClaimToQuery);
             }
             DirectoryEntry defaultNCDirEntry = null;
             DirectorySearcher ds = null;
 
             try
             {
-                string path = String.Format(
+                string path = string.Format(
                     CultureInfo.InvariantCulture,
                     "LDAP://{0}/{1}",
-                    String.IsNullOrEmpty(this.UserSuppliedServerName) ? this.DnsHostName : this.UserSuppliedServerName,
+                    string.IsNullOrEmpty(this.UserSuppliedServerName) ? this.DnsHostName : this.UserSuppliedServerName,
                     this.ContextBasePartitionDN
                     );
 
@@ -1846,7 +1845,7 @@ namespace System.DirectoryServices.AccountManagement
                 if (stringSid == null)
                 {
                     GlobalDebug.WriteLineIf(GlobalDebug.Warn, "ADStoreCtx", "IsMemberOfInStore: bad SID IC");
-                    throw new ArgumentException(StringResources.StoreCtxNeedValueSecurityIdentityClaimToQuery);
+                    throw new ArgumentException(SR.StoreCtxNeedValueSecurityIdentityClaimToQuery);
                 }
 
                 ds.Filter = "(&(objectClass=foreignSecurityPrincipal)(objectSid=" + stringSid + "))";
@@ -1939,7 +1938,7 @@ namespace System.DirectoryServices.AccountManagement
                         // there is such a member, we can't clear the group
                         GlobalDebug.WriteLineIf(GlobalDebug.Info, "ADStoreCtx", "IsMemberOfInStore: found member, can't clear");
 
-                        explanationForFailure = StringResources.ADStoreCtxCantClearGroup;
+                        explanationForFailure = SR.ADStoreCtxCantClearGroup;
                         return false;
                     }
                     else
@@ -2038,7 +2037,7 @@ namespace System.DirectoryServices.AccountManagement
                                                 "CanGroupMemberBeRemoved: primary group member (rid={0}), can't remove",
                                                 groupRid);
 
-                        explanationForFailure = StringResources.ADStoreCtxCantRemoveMemberFromGroup;
+                        explanationForFailure = SR.ADStoreCtxCantRemoveMemberFromGroup;
                         return false;
                     }
                     else
@@ -2078,7 +2077,7 @@ namespace System.DirectoryServices.AccountManagement
         // interact with other StoreCtxs to fulfill the request.
         //
         // This method is typically used by ResultSet implementations, when they're iterating over a collection
-        // (e.g., of group membership) and encounter a entry that represents a foreign principal.
+        // (e.g., of group membership) and encounter an entry that represents a foreign principal.
         internal override Principal ResolveCrossStoreRefToPrincipal(object o)
         {
             Debug.Assert(o is DirectoryEntry);
@@ -2092,7 +2091,7 @@ namespace System.DirectoryServices.AccountManagement
                 if (fpoDE.Properties["objectSid"].Count == 0)
                 {
                     GlobalDebug.WriteLineIf(GlobalDebug.Warn, "ADStoreCtx", "ResolveCrossStoreRefToPrincipal: no objectSid found");
-                    throw new PrincipalOperationException(StringResources.ADStoreCtxCantRetrieveObjectSidForCrossStore);
+                    throw new PrincipalOperationException(SR.ADStoreCtxCantRetrieveObjectSidForCrossStore);
                 }
 
                 Debug.Assert(fpoDE.Properties["objectSid"].Count == 1);
@@ -2146,9 +2145,7 @@ namespace System.DirectoryServices.AccountManagement
                                                 serverName);
 
                         throw new PrincipalOperationException(
-                                String.Format(CultureInfo.CurrentCulture,
-                                                  StringResources.ADStoreCtxCantResolveSidForCrossStore,
-                                                  err));
+                                SR.Format(SR.ADStoreCtxCantResolveSidForCrossStore, err));
                     }
 
                     GlobalDebug.WriteLineIf(GlobalDebug.Info,
@@ -2190,7 +2187,7 @@ namespace System.DirectoryServices.AccountManagement
                 else
                 {
                     GlobalDebug.WriteLineIf(GlobalDebug.Warn, "ADStoreCtx", "ResolveCrossStoreRefToPrincipal: no matching principal");
-                    throw new PrincipalOperationException(StringResources.ADStoreCtxFailedFindCrossStoreTarget);
+                    throw new PrincipalOperationException(SR.ADStoreCtxFailedFindCrossStoreTarget);
                 }
             }
             catch (System.Runtime.InteropServices.COMException e)
@@ -2200,7 +2197,7 @@ namespace System.DirectoryServices.AccountManagement
         }
 
         // Returns true if AccountInfo is supported for the specified principal, false otherwise.
-        // Used when a application tries to access the AccountInfo property of a newly-inserted
+        // Used when an application tries to access the AccountInfo property of a newly-inserted
         // (not yet persisted) AuthenticablePrincipal, to determine whether it should be allowed.
         internal override bool SupportsAccounts(AuthenticablePrincipal p)
         {
@@ -2213,7 +2210,7 @@ namespace System.DirectoryServices.AccountManagement
         }
 
         // Returns the set of credential types supported by this store for the specified principal.
-        // Used when a application tries to access the PasswordInfo property of a newly-inserted
+        // Used when an application tries to access the PasswordInfo property of a newly-inserted
         // (not yet persisted) AuthenticablePrincipal, to determine whether it should be allowed.
         // Also used to implement AuthenticablePrincipal.SupportedCredentialTypes.
         internal override CredentialTypes SupportedCredTypes(AuthenticablePrincipal p)
@@ -2511,10 +2508,10 @@ namespace System.DirectoryServices.AccountManagement
                 {
                     // If it's not a "DC=" component, skip it
                     if ((component.Length > 3) &&
-                        (String.Compare(component.Substring(0, 3), "DC=", StringComparison.OrdinalIgnoreCase) == 0))
+                        string.Equals(component.Substring(0, 3), "DC=", StringComparison.OrdinalIgnoreCase))
                     {
-                        sb.Append(component.Substring(3));
-                        sb.Append(".");
+                        sb.Append(component, 3, component.Length - 3);
+                        sb.Append('.');
                     }
                 }
 

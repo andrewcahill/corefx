@@ -25,18 +25,17 @@ namespace System.Net.Sockets.Tests
         [InlineData(AddressFamily.DataLink)]
         [InlineData(AddressFamily.NetBios)]
         [InlineData(AddressFamily.Unix)]
-        [InlineData(AddressFamily.Unknown)]
         public void Ctor_InvalidFamily_Throws(AddressFamily family)
         {
-            Assert.Throws<ArgumentException>(() => new TcpClient(family));
+            AssertExtensions.Throws<ArgumentException>("family", () => new TcpClient(family));
         }
 
         [Fact]
         public void Ctor_InvalidArguments_Throws()
         {
-            Assert.Throws<ArgumentNullException>("localEP", () => new TcpClient(null));
-            Assert.Throws<ArgumentNullException>("hostname", () => new TcpClient(null, 0));
-            Assert.Throws<ArgumentOutOfRangeException>("port", () => new TcpClient("localhost", -1));
+            AssertExtensions.Throws<ArgumentNullException>("localEP", () => new TcpClient(null));
+            AssertExtensions.Throws<ArgumentNullException>("hostname", () => new TcpClient(null, 0));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("port", () => new TcpClient("localhost", -1));
         }
 
         [Fact]
@@ -44,13 +43,13 @@ namespace System.Net.Sockets.Tests
         {
             using (var client = new TcpClient())
             {
-                Assert.Throws<ArgumentNullException>("hostname", () => client.Connect((string)null, 0));
-                Assert.Throws<ArgumentOutOfRangeException>("port", () => client.Connect("localhost", -1));
+                AssertExtensions.Throws<ArgumentNullException>("hostname", () => client.Connect((string)null, 0));
+                AssertExtensions.Throws<ArgumentOutOfRangeException>("port", () => client.Connect("localhost", -1));
 
-                Assert.Throws<ArgumentNullException>("address", () => client.Connect((IPAddress)null, 0));
-                Assert.Throws<ArgumentOutOfRangeException>("port", () => client.Connect(IPAddress.Loopback, -1));
+                AssertExtensions.Throws<ArgumentNullException>("address", () => client.Connect((IPAddress)null, 0));
+                AssertExtensions.Throws<ArgumentOutOfRangeException>("port", () => client.Connect(IPAddress.Loopback, -1));
 
-                Assert.Throws<ArgumentNullException>("remoteEP", () => client.Connect(null));
+                AssertExtensions.Throws<ArgumentNullException>("remoteEP", () => client.Connect(null));
             }
         }
 
@@ -234,6 +233,7 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "Bug in Connected that dereferences null Client socket")]
         [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void ConnectedAvailable_NullClient()
@@ -247,6 +247,7 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "Bug in ExclusiveAddressUse that dereferences null Client socket")]
         [OuterLoop] // TODO: Issue #11345
         [Fact]
         public void ExclusiveAddressUse_NullClient()
@@ -270,27 +271,12 @@ namespace System.Net.Sockets.Tests
         }
 
         [Fact]
-        [PlatformSpecific(TestPlatforms.Windows)]  // ExclusiveAddressUse=false only supported on Windows
         public void Roundtrip_ExclusiveAddressUse_GetEqualsSet_False()
         {
             using (TcpClient client = new TcpClient())
             {
                 client.ExclusiveAddressUse = false;
                 Assert.False(client.ExclusiveAddressUse);
-            }
-        }
-
-        [OuterLoop] // TODO: Issue #11345
-        [Fact]
-        [PlatformSpecific(TestPlatforms.AnyUnix)]  // ExclusiveAddressUse=false only supported on Windows
-        public void ExclusiveAddressUse_Set_False_NotSupported()
-        {
-            using (TcpClient client = new TcpClient())
-            {
-                Assert.Throws<SocketException>(() =>
-                {
-                    client.ExclusiveAddressUse = false;
-                });
             }
         }
 
@@ -324,6 +310,21 @@ namespace System.Net.Sockets.Tests
                 Assert.True(client.NoDelay);
                 client.NoDelay = false;
                 Assert.False(client.NoDelay);
+            }
+        }
+
+        [Theory]
+        [InlineData(AddressFamily.InterNetwork)]
+        [InlineData(AddressFamily.InterNetworkV6)]
+        public void Ttl_Set_GetEqualsSet(AddressFamily af)
+        {
+            using (TcpClient client = new TcpClient(af))
+            {
+                short newTtl = client.Client.Ttl;
+                // Change default ttl.
+                newTtl += (short)((newTtl < 255) ? 1 : -1);
+                client.Client.Ttl = newTtl;
+                Assert.Equal(newTtl, client.Client.Ttl);
             }
         }
 
@@ -405,6 +406,7 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "Bug in TcpClient.Dispose/EndConnect: the former nulls out Client, which the latter tries to use")]
         [OuterLoop] // TODO: Issue #11345
         [Theory]
         [InlineData(false)]
@@ -439,6 +441,33 @@ namespace System.Net.Sockets.Tests
                 sw.Stop();
 
                 Assert.Null(client.Client); // should be nulled out after Dispose
+            }
+        }
+
+        [Fact]
+        public void Connect_Dual_Success()
+        {
+            if (!Socket.OSSupportsIPv6)
+            {
+                return;
+            }
+
+            using (var server = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp))
+            {
+                // Set up a server socket to which to connect
+                server.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+                server.Listen(1);
+                var endpoint = (IPEndPoint)server.LocalEndPoint;
+
+                using (TcpClient client = new TcpClient())
+                {
+                    // Some platforms may not support IPv6 dual mode and they should fall-back to IPv4
+                    // without throwing exception. However in such case attempt to connect to IPv6 would still fail.
+                    if (client.Client.AddressFamily == AddressFamily.InterNetworkV6 && client.Client.DualMode)
+                    {
+                        client.Connect(endpoint);
+                    }
+                }
             }
         }
 

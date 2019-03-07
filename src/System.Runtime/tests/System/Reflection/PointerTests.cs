@@ -23,22 +23,25 @@ namespace System.Reflection.Tests
         }
     }
 
+    unsafe delegate void MethodDelegate(byte* ptr, int expected);
+
+    unsafe delegate bool* ReturnDelegate(int expected);
+
     public unsafe class PointerTests
     {
         [Fact]
         public void Box_TypeNull()
         {
-            ArgumentNullException ex = Assert.Throws<ArgumentNullException>(() =>
+            ArgumentNullException ex = AssertExtensions.Throws<ArgumentNullException>("type", () =>
             {
                 Pointer.Box((void*)0, null);
             });
-            Assert.Equal("type", ex.ParamName);
         }
 
         [Fact]
         public void Box_NonPointerType()
         {
-            Assert.Throws<ArgumentException>(() =>
+            AssertExtensions.Throws<ArgumentException>("ptr", () =>
             {
                 Pointer.Box((void*)0, typeof(int));
             });
@@ -47,7 +50,7 @@ namespace System.Reflection.Tests
         [Fact]
         public void Unbox_Null()
         {
-            Assert.Throws<ArgumentException>(() =>
+            AssertExtensions.Throws<ArgumentException>("ptr", () =>
             {
                 Pointer.Unbox(null);
             });
@@ -56,7 +59,7 @@ namespace System.Reflection.Tests
         [Fact]
         public void Unbox_NotPointer()
         {
-            Assert.Throws<ArgumentException>(() =>
+            AssertExtensions.Throws<ArgumentException>("ptr", () =>
             {
                 Pointer.Unbox(new object());
             });
@@ -91,6 +94,15 @@ namespace System.Reflection.Tests
             Assert.Equal(value, unchecked((int)obj.field));
         }
 
+        [Fact]
+        public void PointerFieldSetNullValue()
+        {
+            var obj = new PointerHolder();
+            FieldInfo field = typeof(PointerHolder).GetField("field");
+            field.SetValue(obj, null);
+            Assert.Equal(0, unchecked((int)obj.field));
+        }
+
         [Theory]
         [MemberData(nameof(Pointers))]
         public void IntPtrFieldSetValue(int value)
@@ -107,7 +119,7 @@ namespace System.Reflection.Tests
         {
             var obj = new PointerHolder();
             FieldInfo field = typeof(PointerHolder).GetField("field");
-            Assert.Throws<ArgumentException>(() =>
+            AssertExtensions.Throws<ArgumentException>(null, () =>
             {
                 field.SetValue(obj, Pointer.Box(unchecked((void*)value), typeof(long*)));
             });
@@ -152,7 +164,7 @@ namespace System.Reflection.Tests
         {
             var obj = new PointerHolder();
             PropertyInfo property = typeof(PointerHolder).GetProperty("Property");
-            Assert.Throws<ArgumentException>(() =>
+            AssertExtensions.Throws<ArgumentException>(null, () =>
             {
                 property.SetValue(obj, Pointer.Box(unchecked((void*)value), typeof(long*)));
             });
@@ -180,6 +192,14 @@ namespace System.Reflection.Tests
             method.Invoke(obj, new[] { Pointer.Box(unchecked((void*)value), typeof(byte*)), value });
         }
 
+        [Fact]
+        public void PointerNullMethodParameter()
+        {
+            var obj = new PointerHolder();
+            MethodInfo method = typeof(PointerHolder).GetMethod("Method");
+            method.Invoke(obj, new object[] { null, 0 });
+        }
+
         [Theory]
         [MemberData(nameof(Pointers))]
         public void IntPtrMethodParameter(int value)
@@ -195,7 +215,7 @@ namespace System.Reflection.Tests
         {
             var obj = new PointerHolder();
             MethodInfo method = typeof(PointerHolder).GetMethod("Method");
-            Assert.Throws<ArgumentException>(() =>
+            AssertExtensions.Throws<ArgumentException>(null, () =>
             {
                 method.Invoke(obj, new[] { Pointer.Box(unchecked((void*)value), typeof(long*)), value });
             });
@@ -215,11 +235,52 @@ namespace System.Reflection.Tests
 
         [Theory]
         [MemberData(nameof(Pointers))]
-        public void PointerSerializes(int value)
+        public void PointerMethodDelegateParameter(int value)
         {
-            object pointer = Pointer.Box(unchecked((void*)value), typeof(int*));
-            Pointer cloned = BinaryFormatterHelpers.Clone((Pointer)pointer);
-            Assert.Equal((ulong)Pointer.Unbox(pointer), (ulong)Pointer.Unbox(cloned));
+            var obj = new PointerHolder();
+            MethodDelegate d = obj.Method;
+            d.DynamicInvoke(Pointer.Box(unchecked((void*)value), typeof(byte*)), value);
+        }
+
+        [Fact]
+        public void PointerNullMethodDelegateParameter()
+        {
+            var obj = new PointerHolder();
+            MethodDelegate d = obj.Method;
+            d.DynamicInvoke(null, 0);
+        }
+
+        [Theory]
+        [MemberData(nameof(Pointers))]
+        public void IntPtrMethodDelegateParameter(int value)
+        {
+            var obj = new PointerHolder();
+            MethodDelegate d = obj.Method;
+            d.DynamicInvoke((IntPtr)value, value);
+        }
+
+        [Theory]
+        [MemberData(nameof(Pointers))]
+        public void PointerMethodDelegateParameter_InvalidType(int value)
+        {
+            var obj = new PointerHolder();
+            MethodDelegate d = obj.Method;
+            AssertExtensions.Throws<ArgumentException>(null, () =>
+            {
+                d.DynamicInvoke(Pointer.Box(unchecked((void*)value), typeof(long*)), value);
+            });
+        }
+
+        [Theory]
+        [MemberData(nameof(Pointers))]
+        public void PointerMethodDelegateReturn(int value)
+        {
+            var obj = new PointerHolder();
+            ReturnDelegate d = obj.Return;
+            object actualValue = d.DynamicInvoke(value);
+            Assert.IsType<Pointer>(actualValue);
+            void* actualPointer = Pointer.Unbox(actualValue);
+            Assert.Equal(value, unchecked((int)actualPointer));
         }
     }
 }

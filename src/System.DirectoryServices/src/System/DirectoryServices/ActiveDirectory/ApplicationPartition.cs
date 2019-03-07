@@ -2,17 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Text;
+using System.Collections;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Text;
-    using System.Threading;
-    using System.Collections;
-    using System.Globalization;
-    using System.Diagnostics;
-    using System.Runtime.InteropServices;
-    using System.Security.Permissions;
-
     internal enum NCFlags : int
     {
         InstanceTypeIsNCHead = 1,
@@ -113,13 +109,13 @@ namespace System.DirectoryServices.ActiveDirectory
             // validate the context
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             // contexttype should be ApplicationPartiton
             if (context.ContextType != DirectoryContextType.ApplicationPartition)
             {
-                throw new ArgumentException(SR.TargetShouldBeAppNCDnsName, "context");
+                throw new ArgumentException(SR.TargetShouldBeAppNCDnsName, nameof(context));
             }
 
             // target must be ndnc dns name
@@ -167,11 +163,11 @@ namespace System.DirectoryServices.ActiveDirectory
 
             // check that the argument is not null
             if (context == null)
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
 
             if ((context.Name == null) && (!context.isRootDomain()))
             {
-                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, "context");
+                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, nameof(context));
             }
 
             if (context.Name != null)
@@ -179,19 +175,19 @@ namespace System.DirectoryServices.ActiveDirectory
                 // the target should be a valid forest name, configset name or a server
                 if (!((context.isRootDomain()) || (context.isADAMConfigSet()) || context.isServer()))
                 {
-                    throw new ArgumentException(SR.NotADOrADAM, "context");
+                    throw new ArgumentException(SR.NotADOrADAM, nameof(context));
                 }
             }
 
             // check that the distingushed name of the application partition is not null or empty
             if (distinguishedName == null)
-                throw new ArgumentNullException("distinguishedName");
+                throw new ArgumentNullException(nameof(distinguishedName));
 
             if (distinguishedName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "distinguishedName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(distinguishedName));
 
             if (!Utils.IsValidDNFormat(distinguishedName))
-                throw new ArgumentException(SR.InvalidDNFormat, "distinguishedName");
+                throw new ArgumentException(SR.InvalidDNFormat, nameof(distinguishedName));
 
             //  work with copy of the context
             context = new DirectoryContext(context);
@@ -212,7 +208,7 @@ namespace System.DirectoryServices.ActiveDirectory
             catch (ActiveDirectoryObjectNotFoundException)
             {
                 // this is the case where the context is a config set and we could not find an ADAM instance in that config set
-                throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.ADAMInstanceNotFoundInConfigSet , context.Name));
+                throw new ActiveDirectoryOperationException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet , context.Name));
             }
 
             // build the filter
@@ -382,7 +378,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             if (_appType == ApplicationPartitionType.ADApplicationPartition)
@@ -436,7 +432,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             if (_appType == ApplicationPartitionType.ADApplicationPartition)
@@ -487,7 +483,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             if (_appType == ApplicationPartitionType.ADApplicationPartition)
@@ -533,7 +529,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             if (_appType == ApplicationPartitionType.ADApplicationPartition)
@@ -870,24 +866,24 @@ namespace System.DirectoryServices.ActiveDirectory
             // validate context 
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             // contexttype should be DirectoryServer
             if ((context.Name == null) || (!context.isServer()))
             {
-                throw new ArgumentException(SR.TargetShouldBeServer, "context");
+                throw new ArgumentException(SR.TargetShouldBeServer, nameof(context));
             }
 
             // check that the distinguished name is not null or empty
             if (distinguishedName == null)
             {
-                throw new ArgumentNullException("distinguishedName");
+                throw new ArgumentNullException(nameof(distinguishedName));
             }
 
             if (distinguishedName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "distinguishedName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(distinguishedName));
             }
 
             // initialize private variables
@@ -920,12 +916,12 @@ namespace System.DirectoryServices.ActiveDirectory
 
                 if (objectClass == null)
                 {
-                    throw new ArgumentNullException("objectClass");
+                    throw new ArgumentNullException(nameof(objectClass));
                 }
 
                 if (objectClass.Length == 0)
                 {
-                    throw new ArgumentException(SR.EmptyStringParameter, "objectClass");
+                    throw new ArgumentException(SR.EmptyStringParameter, nameof(objectClass));
                 }
             }
 
@@ -969,10 +965,8 @@ namespace System.DirectoryServices.ActiveDirectory
                 {
                     AuthenticationTypes authType = Utils.DefaultAuthType | AuthenticationTypes.FastBind | AuthenticationTypes.Delegation;
 
-                    if (DirectoryContext.ServerBindSupported)
-                    {
-                        authType |= AuthenticationTypes.ServerBind;
-                    }
+
+                    authType |= AuthenticationTypes.ServerBind;
 
                     tempEntry = new DirectoryEntry("LDAP://" + context.GetServerName() + "/" + distinguishedName, context.UserName, context.Password, authType);
                     parent = tempEntry.Parent;
@@ -1020,10 +1014,9 @@ namespace System.DirectoryServices.ActiveDirectory
                     {
                         AuthenticationTypes authType = Utils.DefaultAuthType | AuthenticationTypes.FastBind;
 
-                        if (DirectoryContext.ServerBindSupported)
-                        {
-                            authType |= AuthenticationTypes.ServerBind;
-                        }
+
+                        authType |= AuthenticationTypes.ServerBind;
+                        
                         tempEntry = new DirectoryEntry("LDAP://" + context.Name + "/" + distinguishedName, context.UserName, context.Password, authType);
                         parent = tempEntry.Parent;
                         _domainDNSEntry = parent.Children.Add(Utils.GetRdnFromDN(distinguishedName), objectClass);
@@ -1112,11 +1105,11 @@ namespace System.DirectoryServices.ActiveDirectory
             {
                 foreach (string supportedCapability in rootDSE.Properties[PropertyManager.SupportedCapabilities])
                 {
-                    if (String.Compare(supportedCapability, SupportedCapability.ADOid, StringComparison.OrdinalIgnoreCase) == 0)
+                    if (string.Equals(supportedCapability, SupportedCapability.ADOid, StringComparison.OrdinalIgnoreCase))
                     {
                         type = ApplicationPartitionType.ADApplicationPartition;
                     }
-                    if (String.Compare(supportedCapability, SupportedCapability.ADAMOid, StringComparison.OrdinalIgnoreCase) == 0)
+                    if (string.Equals(supportedCapability, SupportedCapability.ADAMOid, StringComparison.OrdinalIgnoreCase))
                     {
                         type = ApplicationPartitionType.ADAMApplicationPartition;
                     }
@@ -1191,7 +1184,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName != null && siteName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
             }
 
             // Check that the application partition has been committed
@@ -1233,7 +1226,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (siteName != null && siteName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
             }
 
             // Check that the application partition has been committed
@@ -1256,7 +1249,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (siteName != null && siteName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
             }
 
             // Check that the application partition has been committed

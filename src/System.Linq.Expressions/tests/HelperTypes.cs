@@ -249,10 +249,10 @@ namespace System.Linq.Expressions.Tests
     {
         private static readonly IEnumerable<object[]> Booleans = new[]
         {
-            new object[] {false},
 #if FEATURE_COMPILE && FEATURE_INTERPRET
-            new object[] {true}
+            new object[] {false},
 #endif
+            new object[] {true},
         };
 
         public IEnumerator<object[]> GetEnumerator() => Booleans.GetEnumerator();
@@ -345,15 +345,16 @@ namespace System.Linq.Expressions.Tests
         }
     }
 
-    public enum ByteEnum : byte { A = Byte.MaxValue }
-    public enum SByteEnum : sbyte { A = SByte.MaxValue }
-    public enum Int16Enum : short { A = Int16.MaxValue }
-    public enum UInt16Enum : ushort { A = UInt16.MaxValue }
-    public enum Int32Enum : int { A = Int32.MaxValue }
-    public enum UInt32Enum : uint { A = UInt32.MaxValue }
-    public enum Int64Enum : long { A = Int64.MaxValue }
-    public enum UInt64Enum : ulong { A = UInt64.MaxValue }
+    public enum ByteEnum : byte { A = byte.MaxValue }
+    public enum SByteEnum : sbyte { A = sbyte.MaxValue }
+    public enum Int16Enum : short { A = short.MaxValue }
+    public enum UInt16Enum : ushort { A = ushort.MaxValue }
+    public enum Int32Enum : int { A = int.MaxValue }
+    public enum UInt32Enum : uint { A = uint.MaxValue }
+    public enum Int64Enum : long { A = long.MaxValue }
+    public enum UInt64Enum : ulong { A = ulong.MaxValue }
 
+#if FEATURE_COMPILE
     public static class NonCSharpTypes
     {
         private static Type _charEnumType;
@@ -362,7 +363,7 @@ namespace System.Linq.Expressions.Tests
         private static ModuleBuilder GetModuleBuilder()
         {
             AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
-                new AssemblyName("Name"), AssemblyBuilderAccess.Run);
+                new AssemblyName("Name"), AssemblyBuilderAccess.RunAndCollect);
             return assembly.DefineDynamicModule("Name");
         }
 
@@ -376,7 +377,7 @@ namespace System.Linq.Expressions.Tests
                     eb.DefineLiteral("A", 'A');
                     eb.DefineLiteral("B", 'B');
                     eb.DefineLiteral("C", 'C');
-                    _charEnumType = eb.CreateTypeInfo().AsType();
+                    _charEnumType = eb.CreateTypeInfo();
                 }
 
                 return _charEnumType;
@@ -392,13 +393,14 @@ namespace System.Linq.Expressions.Tests
                     EnumBuilder eb = GetModuleBuilder().DefineEnum("BoolEnumType", TypeAttributes.Public, typeof(bool));
                     eb.DefineLiteral("False", false);
                     eb.DefineLiteral("True", true);
-                    _boolEnumType = eb.CreateTypeInfo().AsType();
+                    _boolEnumType = eb.CreateTypeInfo();
                 }
 
                 return _boolEnumType;
             }
         }
     }
+#endif
 
     public class FakeExpression : Expression
     {
@@ -457,7 +459,9 @@ namespace System.Linq.Expressions.Tests
             expression.VerifyIL(il);
 #endif
 
-#if FEATURE_INTERPRET
+            // FEATURE_COMPILE is not directly required, 
+            // but this functionality relies on private reflection and that would not work with AOT
+#if FEATURE_INTERPRET && FEATURE_COMPILE
             expression.VerifyInstructions(instructions);
 #endif
         }

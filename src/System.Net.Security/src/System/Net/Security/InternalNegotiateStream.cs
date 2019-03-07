@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,12 +26,9 @@ namespace System.Net.Security
         private int _InternalOffset;
         private int _InternalBufferCount;
 
-        private FixedSizeReader _FrameReader;
-
         private void InitializeStreamPart()
         {
             _ReadHeader = new byte[4];
-            _FrameReader = new FixedSizeReader(InnerStream);
         }
 
         private byte[] InternalBuffer
@@ -267,7 +263,7 @@ namespace System.Net.Security
             if (asyncRequest != null)
             {
                 asyncRequest.SetNextRequest(_ReadHeader, 0, _ReadHeader.Length, s_readCallback);
-                _FrameReader.AsyncReadPacket(asyncRequest);
+                _ = FixedSizeReader.ReadPacketAsync(InnerStream, asyncRequest);
                 if (!asyncRequest.MustCompleteSynchronously)
                 {
                     return 0;
@@ -277,7 +273,7 @@ namespace System.Net.Security
             }
             else
             {
-                readBytes = _FrameReader.ReadPacket(_ReadHeader, 0, _ReadHeader.Length);
+                readBytes = FixedSizeReader.ReadPacket(InnerStream, _ReadHeader, 0, _ReadHeader.Length);
             }
 
             return StartFrameBody(readBytes, buffer, offset, count, asyncRequest);
@@ -321,7 +317,7 @@ namespace System.Net.Security
             {
                 asyncRequest.SetNextRequest(InternalBuffer, 0, readBytes, s_readCallback);
 
-                _FrameReader.AsyncReadPacket(asyncRequest);
+                _ = FixedSizeReader.ReadPacketAsync(InnerStream, asyncRequest);
 
                 if (!asyncRequest.MustCompleteSynchronously)
                 {
@@ -332,7 +328,7 @@ namespace System.Net.Security
             }
             else //Sync
             {
-                readBytes = _FrameReader.ReadPacket(InternalBuffer, 0, readBytes);
+                readBytes = FixedSizeReader.ReadPacket(InnerStream, InternalBuffer, 0, readBytes);
             }
 
             return ProcessFrameBody(readBytes, buffer, offset, count, asyncRequest);

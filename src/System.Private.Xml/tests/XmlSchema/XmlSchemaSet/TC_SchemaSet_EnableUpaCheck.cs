@@ -19,8 +19,6 @@ namespace System.Xml.Tests
             _output = output;
         }
 
-
-        //todo: use rootpath
         public bool bWarningCallback;
 
         public bool bErrorCallback;
@@ -34,7 +32,7 @@ namespace System.Xml.Tests
             this.testData = Path.Combine(TestData._Root, "EnableUpaCheck");
             bWarningCallback = bErrorCallback = false;
             errorCount = 0;
-            errorLineNumbers = new Int32[10];
+            errorLineNumbers = new int[10];
         }
 
         //Hook up validaton callback

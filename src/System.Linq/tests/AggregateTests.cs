@@ -14,7 +14,7 @@ namespace System.Linq.Tests
         public void SameResultsRepeatCallsIntQuery()
         {
             var q = from x in new[] { 9999, 0, 888, -1, 66, -777, 1, 2, -12345 }
-                    where x > Int32.MinValue
+                    where x > int.MinValue
                     select x;
 
             Assert.Equal(q.Aggregate((x, y) => x + y), q.Aggregate((x, y) => x + y));
@@ -23,8 +23,8 @@ namespace System.Linq.Tests
         [Fact]
         public void SameResultsRepeatCallsStringQuery()
         {
-            var q = from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", String.Empty }
-                    where !String.IsNullOrEmpty(x)
+            var q = from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", string.Empty }
+                    where !string.IsNullOrEmpty(x)
                     select x;
 
             Assert.Equal(q.Aggregate((x, y) => x + y), q.Aggregate((x, y) => x + y));
@@ -186,25 +186,25 @@ namespace System.Linq.Tests
         [Fact]
         public void NullSource()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Aggregate((x, y) => x + y));
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Aggregate(0, (x, y) => x + y));
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Aggregate(0, (x, y) => x + y, i => i));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Aggregate((x, y) => x + y));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Aggregate(0, (x, y) => x + y));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Aggregate(0, (x, y) => x + y, i => i));
         }
 
         [Fact]
         public void NullFunc()
         {
             Func<int, int, int> func = null;
-            Assert.Throws<ArgumentNullException>("func", () => Enumerable.Range(0, 3).Aggregate(func));
-            Assert.Throws<ArgumentNullException>("func", () => Enumerable.Range(0, 3).Aggregate(0, func));
-            Assert.Throws<ArgumentNullException>("func", () => Enumerable.Range(0, 3).Aggregate(0, func, i => i));
+            AssertExtensions.Throws<ArgumentNullException>("func", () => Enumerable.Range(0, 3).Aggregate(func));
+            AssertExtensions.Throws<ArgumentNullException>("func", () => Enumerable.Range(0, 3).Aggregate(0, func));
+            AssertExtensions.Throws<ArgumentNullException>("func", () => Enumerable.Range(0, 3).Aggregate(0, func, i => i));
         }
 
         [Fact]
         public void NullResultSelector()
         {
             Func<int, int> resultSelector = null;
-            Assert.Throws<ArgumentNullException>("resultSelector", () => Enumerable.Range(0, 3).Aggregate(0, (x, y) => x + y, resultSelector));
+            AssertExtensions.Throws<ArgumentNullException>("resultSelector", () => Enumerable.Range(0, 3).Aggregate(0, (x, y) => x + y, resultSelector));
         }
     }
 }

@@ -40,21 +40,20 @@ namespace System.Xml.Tests
     public class XsltApiTestCaseBase2
     {
         // Generic data for all derived test cases
-        public String szXslNS = "http://www.w3.org/1999/XSL/Transform";
+        public string szXslNS = "http://www.w3.org/1999/XSL/Transform";
 
-        public String szDefaultNS = "urn:my-object";
-        public String szEmpty = "";
-        public String szInvalid = "*?%(){}[]&!@#$";
-        public String szLongString = "ThisIsAVeryLongStringToBeStoredAsAVariableToDetermineHowLargeThisBufferForAVariableNameCanBeAndStillFunctionAsExpected";
-        public String szLongNS = "http://www.microsoft.com/this/is/a/very/long/namespace/uri/to/do/the/api/testing/for/xslt/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/";
-        public String[] szWhiteSpace = { "  ", "\n", "\t", "\r", "\t\n  \r\t" };
-        public String szSimple = "myArg";
+        public string szDefaultNS = "urn:my-object";
+        public string szEmpty = "";
+        public string szInvalid = "*?%(){}\0[]&!@#$";
+        public string szLongString = "ThisIsAVeryLongStringToBeStoredAsAVariableToDetermineHowLargeThisBufferForAVariableNameCanBeAndStillFunctionAsExpected";
+        public string szLongNS = "http://www.microsoft.com/this/is/a/very/long/namespace/uri/to/do/the/api/testing/for/xslt/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/";
+        public string[] szWhiteSpace = { "  ", "\n", "\t", "\r", "\t\n  \r\t" };
+        public string szSimple = "myArg";
 
         // Variables from init string
         private string _strPath;                           // Path of the data files
 
         private string _httpPath;                          // Http Path of the data files
-        private bool _fTrace;                            // Should we write out the results of the transform?
 
         // Other global variables
         protected string _strOutFile = "out.xml";        // File to create when using write transforms
@@ -77,7 +76,7 @@ namespace System.Xml.Tests
         static XsltApiTestCaseBase2()
         {
             // Replace absolute URI in xmlResolver_document_function.xml based on the environment
-            string targetFile = Path.Combine(Path.GetTempPath(), "xmlResolver_document_function.xml");
+            string targetFile = Path.Combine(Path.GetTempPath(), typeof(XsltApiTestCaseBase2) + "_" + Path.GetRandomFileName());
             string xslFile = Path.Combine("TestFiles", FilePathUtil.GetTestDataPath(), "XsltApiV2", "xmlResolver_document_function_absolute_uri.xsl");
             XmlDocument doc = new XmlDocument();
             doc.Load(xslFile);
@@ -86,7 +85,7 @@ namespace System.Xml.Tests
             doc.Save(xslFile);
         }
 
-        public OutputType GetOutputType(String s)
+        public OutputType GetOutputType(string s)
         {
             if (s.EndsWith(",URI"))
                 return OutputType.URI;
@@ -106,7 +105,7 @@ namespace System.Xml.Tests
             return myDefaultCredResolver;
         }
 
-        public XslInputType GetXslInputType(String s)
+        public XslInputType GetXslInputType(string s)
         {
             if (s.StartsWith("READER,"))
                 return XslInputType.Reader;
@@ -118,7 +117,7 @@ namespace System.Xml.Tests
                 return XslInputType.URI;
         }
 
-        public NavType GetDocType(String s)
+        public NavType GetDocType(string s)
         {
             switch (s.ToUpper())
             {
@@ -136,7 +135,7 @@ namespace System.Xml.Tests
             }
         }
 
-        public ReaderType GetReaderType(String s)
+        public ReaderType GetReaderType(string s)
         {
             //XmlTextReader, XmlNodeReader, XmlValidatingReader, XsltReader
 
@@ -161,9 +160,6 @@ namespace System.Xml.Tests
 
         public void Init(object objParam)
         {
-            // Get parameter info from runtime variables passed to LTM
-            _fTrace = false;
-
             //This is a temporary fix to restore the baselines. Refer to Test bug #
             _strPath = Path.Combine("TestFiles", FilePathUtil.GetTestDataPath(), "XsltApiV2");
             _httpPath = Path.Combine(FilePathUtil.GetHttpTestDataPath(), "XsltApiV2");
@@ -172,9 +168,9 @@ namespace System.Xml.Tests
             return;
         }
 
-        public String FullFilePath(String szFile)
+        public string FullFilePath(string szFile)
         {
-            if (szFile == null || szFile == String.Empty)
+            if (szFile == null || szFile == string.Empty)
                 return szFile;
             if (szFile.Length > 5)
             {
@@ -184,9 +180,9 @@ namespace System.Xml.Tests
             return szFile;
         }
 
-        public String FullHttpPath(String szFile)
+        public string FullHttpPath(string szFile)
         {
-            if (szFile == null || szFile == String.Empty)
+            if (szFile == null || szFile == string.Empty)
                 return szFile;
             szFile = Path.Combine(_httpPath, szFile);
             return szFile;
@@ -238,7 +234,7 @@ namespace System.Xml.Tests
         // --------------------------------------------------------------------------------------------------------------
         //  LoadXML
         //  -------------------------------------------------------------------------------------------------------------
-        public IXPathNavigable LoadXML(String strFileLocation, NavType _navType)
+        public IXPathNavigable LoadXML(string strFileLocation, NavType _navType)
         {
             switch (_navType)
             {
@@ -528,7 +524,7 @@ namespace System.Xml.Tests
             return (Transform(szXmlFile, outputType, navType, false));
         }
 
-        public int Transform(String szXmlFile, OutputType outputType, NavType navType, bool errorCase)
+        public int Transform(string szXmlFile, OutputType outputType, NavType navType, bool errorCase)
         {
             szXmlFile = FullFilePath(szXmlFile);
 
@@ -723,30 +719,6 @@ namespace System.Xml.Tests
             }
             return 1;
         }
-
-        // --------------------------------------------------------------------------------------------------------------
-        //  CheckResult
-        //  -------------------------------------------------------------------------------------------------------------
-        public int CheckResult(double szExpResult, OutputType outputType)
-        {
-            double checksumActual;
-            CXsltChecksum check = new CXsltChecksum(_fTrace, _output);
-
-            if (outputType == OutputType.URI)
-                checksumActual = check.Calc(xrXSLT);
-            else
-                checksumActual = check.Calc(_strOutFile);
-
-            if (szExpResult != checksumActual || _fTrace)
-            {
-                _output.WriteLine("XML: {0}", check.Xml);
-                _output.WriteLine("Actual checksum: {0}, Expected: {1}", checksumActual, szExpResult);
-            }
-            if (szExpResult != checksumActual)
-                return 0;
-
-            return 1;
-        }
     }
 
     internal class CExceptionHandler
@@ -775,7 +747,7 @@ namespace System.Xml.Tests
         public bool VerifyException(Exception ex)
         {
             Type _type = ex.GetType();
-            res = String.Empty;
+            res = string.Empty;
             msg = (string)_nav.Evaluate("string(/exceptions/exception [@res = '" + res + "']/@message)");
             try
             {

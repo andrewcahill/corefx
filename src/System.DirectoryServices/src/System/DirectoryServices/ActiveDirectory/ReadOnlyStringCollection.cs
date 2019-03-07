@@ -2,13 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Collections;
-    using System.Globalization;
-    using System.DirectoryServices;
-
     public class ReadOnlyStringCollection : ReadOnlyCollectionBase
     {
         internal ReadOnlyStringCollection() { }
@@ -39,7 +36,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (value == null)
             {
-                throw new ArgumentNullException("value");
+                throw new ArgumentNullException(nameof(value));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -57,7 +54,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (value == null)
             {
-                throw new ArgumentNullException("value");
+                throw new ArgumentNullException(nameof(value));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -76,9 +73,6 @@ namespace System.DirectoryServices.ActiveDirectory
             InnerList.CopyTo(values, index);
         }
 
-        internal void Add(String value)
-        {
-            InnerList.Add(value);
-        }
+        internal void Add(string value) => InnerList.Add(value);
     }
 }

@@ -125,14 +125,18 @@ namespace System.Security.Cryptography.Xml
 
         public override object GetOutput(Type type)
         {
-            if ((type != typeof(XmlDocument)) || (!type.IsSubclassOf(typeof(XmlDocument))))
+            if ((type != typeof(XmlDocument)) && (!type.IsSubclassOf(typeof(XmlDocument))))
                 throw new ArgumentException(SR.Cryptography_Xml_TransformIncorrectInputType, nameof(type));
 
             return GetOutput();
         }
 
         // License transform has no inner XML elements
-        public override void LoadInnerXml(XmlNodeList nodeList) { }
+        public override void LoadInnerXml(XmlNodeList nodeList)
+        {
+            if (nodeList != null && nodeList.Count > 0)
+                throw new CryptographicException(SR.Cryptography_Xml_UnknownTransform);
+        }
 
         public override void LoadInput(object obj)
         {

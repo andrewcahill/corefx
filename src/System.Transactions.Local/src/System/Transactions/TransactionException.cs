@@ -11,6 +11,7 @@ namespace System.Transactions
     /// Summary description for TransactionException.
     /// </summary>
     [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.Transactions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class TransactionException : SystemException
     {
         internal static bool IncludeDistributedTxId(Guid distributedTxId)
@@ -23,7 +24,7 @@ namespace System.Transactions
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
             {
-                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionException, message, innerException==null?String.Empty:innerException.ToString());
+                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionException, message, innerException==null?string.Empty:innerException.ToString());
             }
 
             return new TransactionException(message, innerException);
@@ -34,7 +35,7 @@ namespace System.Transactions
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
             {
-                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionException, message, innerException==null?String.Empty:innerException.ToString());
+                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionException, message, innerException==null?string.Empty:innerException.ToString());
             }
 
             return new TransactionException(message, innerException);
@@ -48,12 +49,12 @@ namespace System.Transactions
         {
             string messagewithTxId = SR.EnlistmentStateException;
             if (IncludeDistributedTxId(distributedTxId))
-                messagewithTxId = string.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
+                messagewithTxId = SR.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
 
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
             {
-                etwLog.TransactionExceptionTrace(TransactionExceptionType.InvalidOperationException, messagewithTxId, innerException==null?String.Empty:innerException.ToString());
+                etwLog.TransactionExceptionTrace(TransactionExceptionType.InvalidOperationException, messagewithTxId, innerException==null?string.Empty:innerException.ToString());
             }
             return new InvalidOperationException(messagewithTxId, innerException);
         }
@@ -63,7 +64,7 @@ namespace System.Transactions
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
             {
-                etwLog.TransactionExceptionTrace(traceSource, TransactionExceptionType.InvalidOperationException, message, innerException==null?String.Empty:innerException.ToString());
+                etwLog.TransactionExceptionTrace(traceSource, TransactionExceptionType.InvalidOperationException, message, innerException==null?string.Empty:innerException.ToString());
             }
 
             return new InvalidOperationException(message, innerException);
@@ -106,7 +107,7 @@ namespace System.Transactions
         {
             if (IncludeDistributedTxId(distributedTxId))
             {
-                return new TransactionException(string.Format(SR.DistributedTxIDInTransactionException, message, distributedTxId));
+                return new TransactionException(SR.Format(SR.DistributedTxIDInTransactionException, message, distributedTxId));
             }
             return new TransactionException(message);
         }
@@ -115,7 +116,7 @@ namespace System.Transactions
         {
             string messagewithTxId = message;
             if (IncludeDistributedTxId(distributedTxId))
-                messagewithTxId = string.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
+                messagewithTxId = SR.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
 
             return Create(messagewithTxId, innerException);
         }
@@ -124,7 +125,7 @@ namespace System.Transactions
         {
             string messagewithTxId = message;
             if (IncludeDistributedTxId(distributedTxId))
-                messagewithTxId = string.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
+                messagewithTxId = SR.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
 
             return Create(traceSource, messagewithTxId, innerException);
         }
@@ -133,7 +134,7 @@ namespace System.Transactions
         {
             if (IncludeDistributedTxId(distributedTxId))
             {
-                return new TransactionException(string.Format(SR.DistributedTxIDInTransactionException, message, distributedTxId));
+                return new TransactionException(SR.Format(SR.DistributedTxIDInTransactionException, message, distributedTxId));
             }
             return new TransactionException(message);
         }
@@ -147,7 +148,7 @@ namespace System.Transactions
         {
             string messagewithTxId = SR.TransactionAlreadyCompleted;
             if (IncludeDistributedTxId(distributedTxId))
-                messagewithTxId = string.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
+                messagewithTxId = SR.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
 
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
@@ -162,7 +163,7 @@ namespace System.Transactions
         {
             string messagewithTxId = message;
             if (IncludeDistributedTxId(distributedTxId))
-                messagewithTxId = string.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
+                messagewithTxId = SR.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
 
             return CreateInvalidOperationException(traceSource, messagewithTxId, innerException);
         }
@@ -173,13 +174,14 @@ namespace System.Transactions
     /// Summary description for TransactionAbortedException.
     /// </summary>
     [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.Transactions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class TransactionAbortedException : TransactionException
     {
         internal static new TransactionAbortedException Create(string message, Exception innerException, Guid distributedTxId)
         {
             string messagewithTxId = message;
             if (IncludeDistributedTxId(distributedTxId))
-                messagewithTxId = string.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
+                messagewithTxId = SR.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
 
             return TransactionAbortedException.Create(messagewithTxId, innerException);
         }
@@ -189,7 +191,7 @@ namespace System.Transactions
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
             {
-                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionAbortedException, message, innerException==null?String.Empty:innerException.ToString());
+                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionAbortedException, message, innerException==null?string.Empty:innerException.ToString());
             }
 
             return new TransactionAbortedException(message, innerException);
@@ -221,7 +223,6 @@ namespace System.Transactions
         /// <summary>
         ///
         /// </summary>
-        /// <param name="message"></param>
         /// <param name="innerException"></param>
         internal TransactionAbortedException(Exception innerException) : base(SR.TransactionAborted, innerException)
         {
@@ -229,7 +230,7 @@ namespace System.Transactions
 
         internal TransactionAbortedException(Exception innerException, Guid distributedTxId) :
             base(IncludeDistributedTxId(distributedTxId) ?
-                string.Format(SR.DistributedTxIDInTransactionException, SR.TransactionAborted, distributedTxId)
+                SR.Format(SR.DistributedTxIDInTransactionException, SR.TransactionAborted, distributedTxId)
                 : SR.TransactionAborted, innerException)
         {
         }
@@ -248,13 +249,14 @@ namespace System.Transactions
     /// Summary description for TransactionInDoubtException.
     /// </summary>
     [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.Transactions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class TransactionInDoubtException : TransactionException
     {
         internal static new TransactionInDoubtException Create(TraceSourceType traceSource, string message, Exception innerException, Guid distributedTxId)
         {
             string messagewithTxId = message;
             if (IncludeDistributedTxId(distributedTxId))
-                messagewithTxId = string.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
+                messagewithTxId = SR.Format(SR.DistributedTxIDInTransactionException, messagewithTxId, distributedTxId);
 
             return TransactionInDoubtException.Create(traceSource, messagewithTxId, innerException);
         }
@@ -264,7 +266,7 @@ namespace System.Transactions
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
             {
-                etwLog.TransactionExceptionTrace(traceSource, TransactionExceptionType.TransactionInDoubtException, message, innerException==null?String.Empty:innerException.ToString());
+                etwLog.TransactionExceptionTrace(traceSource, TransactionExceptionType.TransactionInDoubtException, message, innerException==null?string.Empty:innerException.ToString());
             }
 
             return new TransactionInDoubtException(message, innerException);
@@ -308,6 +310,7 @@ namespace System.Transactions
     /// Summary description for TransactionManagerCommunicationException.
     /// </summary>
     [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.Transactions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class TransactionManagerCommunicationException : TransactionException
     {
         internal static new TransactionManagerCommunicationException Create(string message, Exception innerException)
@@ -315,7 +318,7 @@ namespace System.Transactions
             TransactionsEtwProvider etwLog = TransactionsEtwProvider.Log;
             if (etwLog.IsEnabled())
             {
-                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionManagerCommunicationException, message, innerException==null?String.Empty:innerException.ToString());
+                etwLog.TransactionExceptionTrace(TransactionExceptionType.TransactionManagerCommunicationException, message, innerException==null?string.Empty:innerException.ToString());
             }
 
             return new TransactionManagerCommunicationException(message, innerException);
@@ -363,8 +366,8 @@ namespace System.Transactions
         }
     }
 
-
     [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.Transactions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class TransactionPromotionException : TransactionException
     {
         /// <summary>

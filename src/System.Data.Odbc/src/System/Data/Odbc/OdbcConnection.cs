@@ -2,25 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.Collections;
 using System.ComponentModel;
-using System.Data;
 using System.Data.Common;
-using System.Data.ProviderBase;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Security;
-using System.Security.Permissions;
 using System.Text;
-using System.Threading;
 using SysTx = System.Transactions;
 
 namespace System.Data.Odbc
 {
-    [DefaultEvent("InfoMessage")]
     public sealed partial class OdbcConnection : DbConnection, ICloneable
     {
         private int _connectionTimeout = ADP.DefaultConnectionTimeout;
@@ -29,7 +21,7 @@ namespace System.Data.Odbc
         private WeakReference _weakTransaction;
 
         private OdbcConnectionHandle _connectionHandle;
-        private ConnectionState _extraState;    // extras, like Executing and Fetching, that we add to the State.
+        private ConnectionState _extraState = default(ConnectionState);    // extras, like Executing and Fetching, that we add to the State.
 
         public OdbcConnection(string connectionString) : this()
         {
@@ -55,18 +47,7 @@ namespace System.Data.Odbc
             }
         }
 
-        [
-        DefaultValue(""),
-        Editor("Microsoft.VSDesigner.Data.Odbc.Design.OdbcConnectionStringEditor, " + AssemblyRef.MicrosoftVSDesigner, "System.Drawing.Design.UITypeEditor, " + AssemblyRef.SystemDrawing),
-#pragma warning disable 618 // ignore obsolete warning about RecommendedAsConfigurable to use SettingsBindableAttribute
-        RecommendedAsConfigurable(true),
-#pragma warning restore 618
-        SettingsBindableAttribute(true),
-        RefreshProperties(RefreshProperties.All),
-        ResCategoryAttribute(Res.DataCategory_Data),
-        ResDescriptionAttribute(Res.OdbcConnection_ConnectionString),
-        ]
-        override public string ConnectionString
+        public override string ConnectionString
         {
             get
             {
@@ -81,10 +62,8 @@ namespace System.Data.Odbc
         [
         DefaultValue(ADP.DefaultConnectionTimeout),
         DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden),
-        ResCategoryAttribute(Res.DataCategory_Data),
-        ResDescriptionAttribute(Res.OdbcConnection_ConnectionTimeout),
         ]
-        new public int ConnectionTimeout
+        public new int ConnectionTimeout
         {
             get
             {
@@ -102,9 +81,8 @@ namespace System.Data.Odbc
 
         [
         DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden),
-        ResDescriptionAttribute(Res.OdbcConnection_Database),
         ]
-        override public string Database
+        public override string Database
         {
             get
             {
@@ -117,16 +95,15 @@ namespace System.Data.Odbc
                 }
                 //Database is not available before open, and its not worth parsing the
                 //connection string over.
-                return String.Empty;
+                return string.Empty;
             }
         }
 
         [
         Browsable(false),
         DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden),
-        ResDescriptionAttribute(Res.OdbcConnection_DataSource),
         ]
-        override public string DataSource
+        public override string DataSource
         {
             get
             {
@@ -137,16 +114,15 @@ namespace System.Data.Odbc
                     //
                     return GetInfoStringUnhandled(ODBC32.SQL_INFO.SERVER_NAME, true);
                 }
-                return String.Empty;
+                return string.Empty;
             }
         }
 
         [
         Browsable(false),
         DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden),
-        ResDescriptionAttribute(Res.OdbcConnection_ServerVersion),
         ]
-        override public string ServerVersion
+        public override string ServerVersion
         {
             get
             {
@@ -157,9 +133,8 @@ namespace System.Data.Odbc
         [
         Browsable(false),
         DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden),
-        ResDescriptionAttribute(Res.DbConnection_State),
         ]
-        override public ConnectionState State
+        public override ConnectionState State
         {
             get
             {
@@ -218,7 +193,6 @@ namespace System.Data.Odbc
         [
         Browsable(false),
         DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden),
-        ResDescriptionAttribute(Res.OdbcConnection_Driver),
         ]
         public string Driver
         {
@@ -265,10 +239,6 @@ namespace System.Data.Odbc
             }
         }
 
-        [
-        ResCategoryAttribute(Res.DataCategory_InfoMessage),
-        ResDescriptionAttribute(Res.DbConnection_InfoMessage),
-        ]
         public event OdbcInfoMessageEventHandler InfoMessage
         {
             add
@@ -307,12 +277,12 @@ namespace System.Data.Odbc
             return ProviderInfo.QuoteChar;
         }
 
-        new public OdbcTransaction BeginTransaction()
+        public new OdbcTransaction BeginTransaction()
         {
             return BeginTransaction(IsolationLevel.Unspecified);
         }
 
-        new public OdbcTransaction BeginTransaction(IsolationLevel isolevel)
+        public new OdbcTransaction BeginTransaction(IsolationLevel isolevel)
         {
             return (OdbcTransaction)InnerConnection.BeginTransaction(isolevel);
         }
@@ -327,7 +297,7 @@ namespace System.Data.Odbc
             }
         }
 
-        override public void ChangeDatabase(string value)
+        public override void ChangeDatabase(string value)
         {
             InnerConnection.ChangeDatabase(value);
         }
@@ -344,7 +314,6 @@ namespace System.Data.Odbc
         object ICloneable.Clone()
         {
             OdbcConnection clone = new OdbcConnection(this);
-            Bid.Trace("<odbc.OdbcConnection.Clone|API> %d#, clone=%d#\n", ObjectID, clone.ObjectID);
             return clone;
         }
 
@@ -367,9 +336,9 @@ namespace System.Data.Odbc
             return false;
         }
 
-        new public OdbcCommand CreateCommand()
+        public new OdbcCommand CreateCommand()
         {
-            return new OdbcCommand(String.Empty, this);
+            return new OdbcCommand(string.Empty, this);
         }
 
         internal OdbcStatementHandle CreateStatementHandle()
@@ -377,7 +346,7 @@ namespace System.Data.Odbc
             return new OdbcStatementHandle(ConnectionHandle);
         }
 
-        override public void Close()
+        public override void Close()
         {
             InnerConnection.CloseConnection(this, ConnectionFactory);
 
@@ -407,15 +376,10 @@ namespace System.Data.Odbc
         { // MDAC 65459
         }
 
-        public void EnlistDistributedTransaction(System.EnterpriseServices.ITransaction transaction)
-        {
-            EnlistDistributedTransactionHelper(transaction);
-        }
-
         internal string GetConnectAttrString(ODBC32.SQL_ATTR attribute)
         {
             string value = "";
-            Int32 cbActual = 0;
+            int cbActual = 0;
             byte[] buffer = new byte[100];
             OdbcConnectionHandle connectionHandle = ConnectionHandle;
             if (null != connectionHandle)
@@ -447,8 +411,8 @@ namespace System.Data.Odbc
 
         internal int GetConnectAttr(ODBC32.SQL_ATTR attribute, ODBC32.HANDLER handler)
         {
-            Int32 retval = -1;
-            Int32 cbActual = 0;
+            int retval = -1;
+            int cbActual = 0;
             byte[] buffer = new byte[4];
             OdbcConnectionHandle connectionHandle = ConnectionHandle;
             if (null != connectionHandle)
@@ -486,7 +450,7 @@ namespace System.Data.Odbc
             return sqlstate;
         }
 
-        internal ODBC32.RetCode GetInfoInt16Unhandled(ODBC32.SQL_INFO info, out Int16 resultValue)
+        internal ODBC32.RetCode GetInfoInt16Unhandled(ODBC32.SQL_INFO info, out short resultValue)
         {
             byte[] buffer = new byte[2];
             ODBC32.RetCode retcode = ConnectionHandle.GetInfo1(info, buffer);
@@ -494,7 +458,7 @@ namespace System.Data.Odbc
             return retcode;
         }
 
-        internal ODBC32.RetCode GetInfoInt32Unhandled(ODBC32.SQL_INFO info, out Int32 resultValue)
+        internal ODBC32.RetCode GetInfoInt32Unhandled(ODBC32.SQL_INFO info, out int resultValue)
         {
             byte[] buffer = new byte[4];
             ODBC32.RetCode retcode = ConnectionHandle.GetInfo1(info, buffer);
@@ -502,7 +466,7 @@ namespace System.Data.Odbc
             return retcode;
         }
 
-        private Int32 GetInfoInt32Unhandled(ODBC32.SQL_INFO infotype)
+        private int GetInfoInt32Unhandled(ODBC32.SQL_INFO infotype)
         {
             byte[] buffer = new byte[4];
             ConnectionHandle.GetInfo1(infotype, buffer);
@@ -518,7 +482,7 @@ namespace System.Data.Odbc
         {
             //SQLGetInfo
             string value = null;
-            Int16 cbActual = 0;
+            short cbActual = 0;
             byte[] buffer = new byte[100];
             OdbcConnectionHandle connectionHandle = ConnectionHandle;
             if (null != connectionHandle)
@@ -595,9 +559,16 @@ namespace System.Data.Odbc
             }
         }
 
-        override public void Open()
+        public override void Open()
         {
-            InnerConnection.OpenConnection(this, ConnectionFactory);
+            try
+            {
+                InnerConnection.OpenConnection(this, ConnectionFactory);
+            }
+            catch (DllNotFoundException e) when (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                throw new DllNotFoundException(SR.Odbc_UnixOdbcNotFound + Environment.NewLine + e.Message);
+            }
 
             // SQLBUDT #276132 - need to manually enlist in some cases, because
             // native ODBC doesn't know about SysTx transactions.
@@ -627,9 +598,8 @@ namespace System.Data.Odbc
             }
         }
 
-        static public void ReleaseObjectPool()
+        public static void ReleaseObjectPool()
         {
-            (new OdbcPermission(PermissionState.Unrestricted)).Demand();
             OdbcEnvironment.ReleaseObjectPool();
         }
 
@@ -753,7 +723,7 @@ namespace System.Data.Odbc
                     ProviderInfo.NoConnectionDead = true;
                     break;
                 default:
-                    Debug.Assert(false, "Can't flag unknown Attribute");
+                    Debug.Fail("Can't flag unknown Attribute");
                     break;
             }
         }
@@ -772,7 +742,7 @@ namespace System.Data.Odbc
                     ProviderInfo.NoSqlSoptSSHiddenColumns = true;
                     break;
                 default:
-                    Debug.Assert(false, "Can't flag unknown Attribute");
+                    Debug.Fail("Can't flag unknown Attribute");
                     break;
             }
         }
@@ -789,7 +759,7 @@ namespace System.Data.Odbc
                         break;
                     // SSS_WARNINGS_ON
                     default:
-                        Debug.Assert(false, "Can't flag unknown Attribute");
+                        Debug.Fail("Can't flag unknown Attribute");
                         break;
                 }
             }
@@ -798,18 +768,18 @@ namespace System.Data.Odbc
                 switch (v2FieldId)
                 {
                     default:
-                        Debug.Assert(false, "Can't flag unknown Attribute");
+                        Debug.Fail("Can't flag unknown Attribute");
                         break;
                 }
             }
         }
 
-        internal Boolean SQLGetFunctions(ODBC32.SQL_API odbcFunction)
+        internal bool SQLGetFunctions(ODBC32.SQL_API odbcFunction)
         {
             //SQLGetFunctions
             ODBC32.RetCode retcode;
-            Int16 fExists;
-            Debug.Assert((Int16)odbcFunction != 0, "SQL_API_ALL_FUNCTIONS is not supported");
+            short fExists;
+            Debug.Assert((short)odbcFunction != 0, "SQL_API_ALL_FUNCTIONS is not supported");
             OdbcConnectionHandle connectionHandle = ConnectionHandle;
             if (null != connectionHandle)
             {
@@ -817,7 +787,7 @@ namespace System.Data.Odbc
             }
             else
             {
-                Debug.Assert(false, "GetFunctions called and ConnectionHandle is null (connection is disposed?)");
+                Debug.Fail("GetFunctions called and ConnectionHandle is null (connection is disposed?)");
                 throw ODBC.ConnectionClosed();
             }
 
@@ -868,7 +838,7 @@ namespace System.Data.Odbc
                         break;
                     }
                 default:
-                    Debug.Assert(false, "Testing that sqltype is currently not supported");
+                    Debug.Fail("Testing that sqltype is currently not supported");
                     return false;
             }
             // now we can check if we have already tested that type
@@ -905,7 +875,7 @@ namespace System.Data.Odbc
                         break;
                     }
                 default:
-                    Debug.Assert(false, "Testing that sqltype is currently not supported");
+                    Debug.Fail("Testing that sqltype is currently not supported");
                     return false;
             }
             return (0 != (ProviderInfo.RestrictedSQLBindTypes & (int)sqlcvt));
@@ -913,33 +883,21 @@ namespace System.Data.Odbc
 
         // suppress this message - we cannot use SafeHandle here. Also, see notes in the code (VSTFDEVDIV# 560355)
         [SuppressMessage("Microsoft.Reliability", "CA2004:RemoveCallsToGCKeepAlive")]
-        override protected DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
         {
-            IntPtr hscp;
+            DbTransaction transaction = InnerConnection.BeginTransaction(isolationLevel);
 
-            Bid.ScopeEnter(out hscp, "<prov.OdbcConnection.BeginDbTransaction|API> %d#, isolationLevel=%d{ds.IsolationLevel}", ObjectID, (int)isolationLevel);
-            try
-            {
-                DbTransaction transaction = InnerConnection.BeginTransaction(isolationLevel);
+            // VSTFDEVDIV# 560355 - InnerConnection doesn't maintain a ref on the outer connection (this) and 
+            //   subsequently leaves open the possibility that the outer connection could be GC'ed before the DbTransaction
+            //   is fully hooked up (leaving a DbTransaction with a null connection property). Ensure that this is reachable
+            //   until the completion of BeginTransaction with KeepAlive
+            GC.KeepAlive(this);
 
-                // VSTFDEVDIV# 560355 - InnerConnection doesn't maintain a ref on the outer connection (this) and 
-                //   subsequently leaves open the possibility that the outer connection could be GC'ed before the DbTransaction
-                //   is fully hooked up (leaving a DbTransaction with a null connection property). Ensure that this is reachable
-                //   until the completion of BeginTransaction with KeepAlive
-                GC.KeepAlive(this);
-
-                return transaction;
-            }
-            finally
-            {
-                Bid.ScopeLeave(ref hscp);
-            }
+            return transaction;
         }
 
         internal OdbcTransaction Open_BeginTransaction(IsolationLevel isolevel)
         {
-            OdbcConnection.ExecutePermission.Demand();
-
             CheckState(ADP.BeginTransaction); // MDAC 68323
 
             RollbackDeadTransaction();
@@ -979,8 +937,6 @@ namespace System.Data.Odbc
 
         internal void Open_ChangeDatabase(string value)
         {
-            OdbcConnection.ExecutePermission.Demand();
-
             CheckState(ADP.ChangeDatabase);
 
             // Database name must not be null, empty or whitspace
@@ -996,43 +952,12 @@ namespace System.Data.Odbc
 
             //Set the database
             OdbcConnectionHandle connectionHandle = ConnectionHandle;
-            ODBC32.RetCode retcode = connectionHandle.SetConnectionAttribute3(ODBC32.SQL_ATTR.CURRENT_CATALOG, value, checked((Int32)value.Length * 2));
+            ODBC32.RetCode retcode = connectionHandle.SetConnectionAttribute3(ODBC32.SQL_ATTR.CURRENT_CATALOG, value, checked((int)value.Length * 2));
 
             if (retcode != ODBC32.RetCode.SUCCESS)
             {
                 HandleError(connectionHandle, retcode);
             }
-        }
-
-        internal void Open_EnlistTransaction(SysTx.Transaction transaction)
-        {
-            OdbcConnection.VerifyExecutePermission();
-
-            if ((null != _weakTransaction) && _weakTransaction.IsAlive)
-            {
-                throw ADP.LocalTransactionPresent();
-            }
-
-            SysTx.IDtcTransaction oleTxTransaction = ADP.GetOletxTransaction(transaction);
-
-            OdbcConnectionHandle connectionHandle = ConnectionHandle;
-            ODBC32.RetCode retcode;
-            if (null == oleTxTransaction)
-            {
-                retcode = connectionHandle.SetConnectionAttribute2(ODBC32.SQL_ATTR.SQL_COPT_SS_ENLIST_IN_DTC, (IntPtr)ODBC32.SQL_DTC_DONE, ODBC32.SQL_IS_PTR);
-            }
-            else
-            {
-                retcode = connectionHandle.SetConnectionAttribute4(ODBC32.SQL_ATTR.SQL_COPT_SS_ENLIST_IN_DTC, oleTxTransaction, ODBC32.SQL_IS_PTR);
-            }
-
-            if (retcode != ODBC32.RetCode.SUCCESS)
-            {
-                HandleError(connectionHandle, retcode);
-            }
-
-            // Tell the base class about our enlistment
-            ((OdbcConnectionOpen)InnerConnection).EnlistedTransaction = transaction;
         }
 
         internal string Open_GetServerVersion()

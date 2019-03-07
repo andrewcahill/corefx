@@ -2,22 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections;
+using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
-using System.Globalization;
-using System.Runtime.Serialization;
-using System.Security.Permissions;
-using System.Text;
 
 namespace System.Data.Odbc
 {
-    [DefaultProperty("Driver")]
-    [System.ComponentModel.TypeConverterAttribute(typeof(OdbcConnectionStringBuilder.OdbcConnectionStringBuilderConverter))]
     public sealed class OdbcConnectionStringBuilder : DbConnectionStringBuilder
     {
         private enum Keywords
@@ -60,7 +53,7 @@ namespace System.Data.Odbc
 
         public OdbcConnectionStringBuilder(string connectionString) : base(true)
         {
-            if (!ADP.IsEmpty(connectionString))
+            if (!string.IsNullOrEmpty(connectionString))
             {
                 ConnectionString = connectionString;
             }
@@ -70,7 +63,7 @@ namespace System.Data.Odbc
         {
             get
             {
-                ADP.CheckArgumentNull(keyword, "keyword");
+                ADP.CheckArgumentNull(keyword, nameof(keyword));
                 Keywords index;
                 if (s_keywords.TryGetValue(keyword, out index))
                 {
@@ -83,7 +76,7 @@ namespace System.Data.Odbc
             }
             set
             {
-                ADP.CheckArgumentNull(keyword, "keyword");
+                ADP.CheckArgumentNull(keyword, nameof(keyword));
                 if (null != value)
                 {
                     Keywords index;
@@ -95,7 +88,7 @@ namespace System.Data.Odbc
                             case Keywords.Dsn: Dsn = ConvertToString(value); break;
                             //                      case Keywords.NamedConnection: NamedConnection = ConvertToString(value); break;
                             default:
-                                Debug.Assert(false, "unexpected keyword");
+                                Debug.Fail("unexpected keyword");
                                 throw ADP.KeywordNotSupported(keyword);
                         }
                     }
@@ -114,9 +107,6 @@ namespace System.Data.Odbc
         }
 
         [DisplayName(DbConnectionStringKeywords.Driver)]
-        [ResCategoryAttribute(Res.DataCategory_Source)]
-        [ResDescriptionAttribute(Res.DbConnectionString_Driver)]
-        [RefreshPropertiesAttribute(RefreshProperties.All)]
         public string Driver
         {
             get { return _driver; }
@@ -128,9 +118,6 @@ namespace System.Data.Odbc
         }
 
         [DisplayName(DbConnectionStringKeywords.Dsn)]
-        [ResCategoryAttribute(Res.DataCategory_NamedConnectionString)]
-        [ResDescriptionAttribute(Res.DbConnectionString_DSN)]
-        [RefreshPropertiesAttribute(RefreshProperties.All)]
         public string Dsn
         {
             get { return _dsn; }
@@ -206,7 +193,7 @@ namespace System.Data.Odbc
                     }
                     _knownKeywords = knownKeywords;
                 }
-                return new System.Data.Common.ReadOnlyCollection<string>(knownKeywords);
+                return new ReadOnlyCollection<string>(knownKeywords);
             }
         }
 
@@ -222,7 +209,7 @@ namespace System.Data.Odbc
 
         public override bool ContainsKey(string keyword)
         {
-            ADP.CheckArgumentNull(keyword, "keyword");
+            ADP.CheckArgumentNull(keyword, nameof(keyword));
             return s_keywords.ContainsKey(keyword) || base.ContainsKey(keyword);
         }
 
@@ -239,7 +226,7 @@ namespace System.Data.Odbc
                 case Keywords.Dsn: return Dsn;
                 //          case Keywords.NamedConnection: return NamedConnection;
                 default:
-                    Debug.Assert(false, "unexpected keyword");
+                    Debug.Fail("unexpected keyword");
                     throw ADP.KeywordNotSupported(s_validKeywords[(int)index]);
             }
         }
@@ -285,7 +272,7 @@ namespace System.Data.Odbc
 
         public override bool Remove(string keyword)
         {
-            ADP.CheckArgumentNull(keyword, "keyword");
+            ADP.CheckArgumentNull(keyword, nameof(keyword));
             if (base.Remove(keyword))
             {
                 Keywords index;
@@ -316,7 +303,7 @@ namespace System.Data.Odbc
                 //               _namedConnection = DbConnectionStringDefaults.NamedConnection;
                 //                break;
                 default:
-                    Debug.Assert(false, "unexpected keyword");
+                    Debug.Fail("unexpected keyword");
                     throw ADP.KeywordNotSupported(s_validKeywords[(int)index]);
             }
         }
@@ -329,7 +316,7 @@ namespace System.Data.Odbc
 
         public override bool TryGetValue(string keyword, out object value)
         {
-            ADP.CheckArgumentNull(keyword, "keyword");
+            ADP.CheckArgumentNull(keyword, nameof(keyword));
             Keywords index;
             if (s_keywords.TryGetValue(keyword, out index))
             {
@@ -337,48 +324,6 @@ namespace System.Data.Odbc
                 return true;
             }
             return base.TryGetValue(keyword, out value);
-        }
-
-        internal sealed class OdbcConnectionStringBuilderConverter : ExpandableObjectConverter
-        {
-            // converter classes should have public ctor
-            public OdbcConnectionStringBuilderConverter()
-            {
-            }
-
-            override public bool CanConvertTo(ITypeDescriptorContext context, Type destinationType)
-            {
-                if (typeof(System.ComponentModel.Design.Serialization.InstanceDescriptor) == destinationType)
-                {
-                    return true;
-                }
-                return base.CanConvertTo(context, destinationType);
-            }
-
-            override public object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
-            {
-                if (destinationType == null)
-                {
-                    throw ADP.ArgumentNull("destinationType");
-                }
-                if (typeof(System.ComponentModel.Design.Serialization.InstanceDescriptor) == destinationType)
-                {
-                    OdbcConnectionStringBuilder obj = (value as OdbcConnectionStringBuilder);
-                    if (null != obj)
-                    {
-                        return ConvertToInstanceDescriptor(obj);
-                    }
-                }
-                return base.ConvertTo(context, culture, value, destinationType);
-            }
-
-            private System.ComponentModel.Design.Serialization.InstanceDescriptor ConvertToInstanceDescriptor(OdbcConnectionStringBuilder options)
-            {
-                Type[] ctorParams = new Type[] { typeof(string) };
-                object[] ctorValues = new object[] { options.ConnectionString };
-                System.Reflection.ConstructorInfo ctor = typeof(OdbcConnectionStringBuilder).GetConstructor(ctorParams);
-                return new System.ComponentModel.Design.Serialization.InstanceDescriptor(ctor, ctorValues);
-            }
         }
     }
 }

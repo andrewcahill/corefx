@@ -13,7 +13,7 @@ using System.Reflection;
 
 namespace System.Data.Common
 {
-    internal static class DbConnectionStringBuilderUtil
+    internal static partial class DbConnectionStringBuilderUtil
     {
         internal static bool ConvertToBoolean(object value)
         {
@@ -33,7 +33,7 @@ namespace System.Data.Common
                     else if (StringComparer.OrdinalIgnoreCase.Equals(tmp, "false") || StringComparer.OrdinalIgnoreCase.Equals(tmp, "no"))
                         return false;
                 }
-                return Boolean.Parse(svalue);
+                return bool.Parse(svalue);
             }
             try
             {
@@ -41,7 +41,7 @@ namespace System.Data.Common
             }
             catch (InvalidCastException e)
             {
-                throw ADP.ConvertFailed(value.GetType(), typeof(Boolean), e);
+                throw ADP.ConvertFailed(value.GetType(), typeof(bool), e);
             }
         }
 
@@ -63,7 +63,7 @@ namespace System.Data.Common
                     else if (StringComparer.OrdinalIgnoreCase.Equals(tmp, "false") || StringComparer.OrdinalIgnoreCase.Equals(tmp, "no"))
                         return false;
                 }
-                return Boolean.Parse(svalue);
+                return bool.Parse(svalue);
             }
             try
             {
@@ -71,7 +71,7 @@ namespace System.Data.Common
             }
             catch (InvalidCastException e)
             {
-                throw ADP.ConvertFailed(value.GetType(), typeof(Boolean), e);
+                throw ADP.ConvertFailed(value.GetType(), typeof(bool), e);
             }
         }
 
@@ -83,7 +83,7 @@ namespace System.Data.Common
             }
             catch (InvalidCastException e)
             {
-                throw ADP.ConvertFailed(value.GetType(), typeof(Int32), e);
+                throw ADP.ConvertFailed(value.GetType(), typeof(int), e);
             }
         }
 
@@ -95,7 +95,7 @@ namespace System.Data.Common
             }
             catch (InvalidCastException e)
             {
-                throw ADP.ConvertFailed(value.GetType(), typeof(String), e);
+                throw ADP.ConvertFailed(value.GetType(), typeof(string), e);
             }
         }
 
@@ -224,11 +224,10 @@ namespace System.Data.Common
         }
     }
 
-    internal static class DbConnectionStringDefaults
+    internal static partial class DbConnectionStringDefaults
     {
         // all
-        //        internal const string NamedConnection           = "";
-
+        // internal const string NamedConnection = "";
 
         // SqlClient
         internal const ApplicationIntent ApplicationIntent = System.Data.SqlClient.ApplicationIntent.ReadWrite;
@@ -238,6 +237,7 @@ namespace System.Data.Common
         internal const string CurrentLanguage = "";
         internal const string DataSource = "";
         internal const bool Encrypt = false;
+        internal const bool Enlist = true;
         internal const string FailoverPartner = "";
         internal const string InitialCatalog = "";
         internal const bool IntegratedSecurity = false;
@@ -262,11 +262,10 @@ namespace System.Data.Common
     }
 
 
-    internal static class DbConnectionStringKeywords
+    internal static partial class DbConnectionStringKeywords
     {
         // all
-        //        internal const string NamedConnection           = "Named Connection";
-
+        // internal const string NamedConnection = "Named Connection";
 
         // SqlClient
         internal const string ApplicationIntent = "ApplicationIntent";
@@ -297,6 +296,7 @@ namespace System.Data.Common
         internal const string DataSource = "Data Source";
         internal const string IntegratedSecurity = "Integrated Security";
         internal const string Password = "Password";
+        internal const string Driver = "Driver";
         internal const string PersistSecurityInfo = "Persist Security Info";
         internal const string UserID = "User ID";
 
@@ -306,6 +306,9 @@ namespace System.Data.Common
         internal const string MaxPoolSize = "Max Pool Size";
         internal const string Pooling = "Pooling";
         internal const string MinPoolSize = "Min Pool Size";
+#if netcoreapp
+        internal const string PoolBlockingPeriod = "PoolBlockingPeriod";
+#endif
     }
 
     internal static class DbConnectionStringSynonyms

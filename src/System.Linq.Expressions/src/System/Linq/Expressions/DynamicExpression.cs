@@ -22,7 +22,7 @@ namespace System.Linq.Expressions
     {
         internal DynamicExpression(Type delegateType, CallSiteBinder binder)
         {
-            Debug.Assert(delegateType.GetMethod("Invoke").GetReturnType() == typeof(object) || GetType() != typeof(DynamicExpression));
+            Debug.Assert(delegateType.GetInvokeMethod().GetReturnType() == typeof(object) || GetType() != typeof(DynamicExpression));
             DelegateType = delegateType;
             Binder = binder;
         }
@@ -516,7 +516,7 @@ namespace System.Linq.Expressions
         internal TypedDynamicExpressionN(Type returnType, Type delegateType, CallSiteBinder binder, IReadOnlyList<Expression> arguments)
             : base(delegateType, binder, arguments)
         {
-            Debug.Assert(delegateType.GetMethod("Invoke").GetReturnType() == returnType);
+            Debug.Assert(delegateType.GetInvokeMethod().GetReturnType() == returnType);
             Type = returnType;
         }
 
@@ -551,7 +551,7 @@ namespace System.Linq.Expressions
                 using (IEnumerator<Expression> en = arguments.GetEnumerator())
                 {
                     en.MoveNext();
-                    return en.Current == ReturnObject<Expression>(_arg0);
+                    return en.Current == ExpressionUtils.ReturnObject<Expression>(_arg0);
                 }
             }
 
@@ -818,7 +818,7 @@ namespace System.Linq.Expressions
 
     #endregion
 
-    internal class ExpressionExtension
+    internal static class ExpressionExtension
     {
         /// <summary>
         /// Creates a <see cref="DynamicExpression" /> that represents a dynamic operation bound by the provided <see cref="CallSiteBinder" />.
@@ -827,7 +827,7 @@ namespace System.Linq.Expressions
         /// <param name="binder">The runtime binder for the dynamic operation.</param>
         /// <param name="arguments">The arguments to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.DelegateType">DelegateType</see>,
         /// <see cref="DynamicExpression.Binder">Binder</see>, and
@@ -845,7 +845,7 @@ namespace System.Linq.Expressions
         /// <param name="binder">The runtime binder for the dynamic operation.</param>
         /// <param name="arguments">The arguments to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.DelegateType">DelegateType</see>,
         /// <see cref="DynamicExpression.Binder">Binder</see>, and
@@ -885,7 +885,7 @@ namespace System.Linq.Expressions
         /// <param name="binder">The runtime binder for the dynamic operation.</param>
         /// <param name="arg0">The argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.DelegateType">DelegateType</see>,
         /// <see cref="DynamicExpression.Binder">Binder</see>, and
@@ -915,7 +915,7 @@ namespace System.Linq.Expressions
         /// <param name="arg0">The first argument to the dynamic operation.</param>
         /// <param name="arg1">The second argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.DelegateType">DelegateType</see>,
         /// <see cref="DynamicExpression.Binder">Binder</see>, and
@@ -948,7 +948,7 @@ namespace System.Linq.Expressions
         /// <param name="arg1">The second argument to the dynamic operation.</param>
         /// <param name="arg2">The third argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.DelegateType">DelegateType</see>,
         /// <see cref="DynamicExpression.Binder">Binder</see>, and
@@ -984,7 +984,7 @@ namespace System.Linq.Expressions
         /// <param name="arg2">The third argument to the dynamic operation.</param>
         /// <param name="arg3">The fourth argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.DelegateType">DelegateType</see>,
         /// <see cref="DynamicExpression.Binder">Binder</see>, and
@@ -1014,7 +1014,7 @@ namespace System.Linq.Expressions
 
         private static MethodInfo GetValidMethodForDynamic(Type delegateType)
         {
-            var method = delegateType.GetMethod("Invoke");
+            var method = delegateType.GetInvokeMethod();
             var pi = method.GetParametersCached();
             if (pi.Length == 0 || pi[0].ParameterType != typeof(CallSite)) throw Error.FirstArgumentMustBeCallSite();
             return method;
@@ -1027,7 +1027,7 @@ namespace System.Linq.Expressions
         /// <param name="returnType">The result type of the dynamic expression.</param>
         /// <param name="arguments">The arguments to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.Binder">Binder</see> and
         /// <see cref="DynamicExpression.Arguments">Arguments</see> set to the specified values.
@@ -1048,7 +1048,7 @@ namespace System.Linq.Expressions
         /// <param name="returnType">The result type of the dynamic expression.</param>
         /// <param name="arg0">The first argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.Binder">Binder</see> and
         /// <see cref="DynamicExpression.Arguments">Arguments</see> set to the specified values.
@@ -1083,7 +1083,7 @@ namespace System.Linq.Expressions
         /// <param name="arg0">The first argument to the dynamic operation.</param>
         /// <param name="arg1">The second argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.Binder">Binder</see> and
         /// <see cref="DynamicExpression.Arguments">Arguments</see> set to the specified values.
@@ -1123,7 +1123,7 @@ namespace System.Linq.Expressions
         /// <param name="arg1">The second argument to the dynamic operation.</param>
         /// <param name="arg2">The third argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.Binder">Binder</see> and
         /// <see cref="DynamicExpression.Arguments">Arguments</see> set to the specified values.
@@ -1168,7 +1168,7 @@ namespace System.Linq.Expressions
         /// <param name="arg2">The third argument to the dynamic operation.</param>
         /// <param name="arg3">The fourth argument to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.Binder">Binder</see> and
         /// <see cref="DynamicExpression.Arguments">Arguments</see> set to the specified values.
@@ -1214,7 +1214,7 @@ namespace System.Linq.Expressions
         /// <param name="returnType">The result type of the dynamic expression.</param>
         /// <param name="arguments">The arguments to the dynamic operation.</param>
         /// <returns>
-        /// A <see cref="DynamicExpression" /> that has <see cref="NodeType" /> equal to
+        /// A <see cref="DynamicExpression" /> that has <see cref="DynamicExpression.NodeType" /> equal to
         /// <see cref="ExpressionType.Dynamic">Dynamic</see> and has the
         /// <see cref="DynamicExpression.Binder">Binder</see> and
         /// <see cref="DynamicExpression.Arguments">Arguments</see> set to the specified values.
@@ -1271,7 +1271,7 @@ namespace System.Linq.Expressions
             ExpressionUtils.RequiresCanRead(arg, paramName, index);
             var type = arg.Type;
             ContractUtils.RequiresNotNull(type, nameof(type));
-            TypeUtils.ValidateType(type, nameof(type));
+            TypeUtils.ValidateType(type, nameof(type), allowByRef: true, allowPointer: true);
             if (type == typeof(void)) throw Error.ArgumentTypeCannotBeVoid();
         }
     }

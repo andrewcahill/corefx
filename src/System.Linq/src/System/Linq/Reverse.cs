@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -14,7 +13,7 @@ namespace System.Linq
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             return new ReverseIterator<TSource>(source);
@@ -24,7 +23,7 @@ namespace System.Linq
         /// An iterator that yields the items of an <see cref="IEnumerable{TSource}"/> in reverse.
         /// </summary>
         /// <typeparam name="TSource">The type of the source enumerable.</typeparam>
-        private sealed class ReverseIterator<TSource> : Iterator<TSource>, IIListProvider<TSource>
+        private sealed partial class ReverseIterator<TSource> : Iterator<TSource>
         {
             private readonly IEnumerable<TSource> _source;
             private TSource[] _buffer;
@@ -35,10 +34,7 @@ namespace System.Linq
                 _source = source;
             }
 
-            public override Iterator<TSource> Clone()
-            {
-                return new ReverseIterator<TSource>(_source);
-            }
+            public override Iterator<TSource> Clone() => new ReverseIterator<TSource>(_source);
 
             public override bool MoveNext()
             {
@@ -86,39 +82,6 @@ namespace System.Linq
             {
                 _buffer = null; // Just in case this ends up being long-lived, allow the memory to be reclaimed.
                 base.Dispose();
-            }
-
-            public TSource[] ToArray()
-            {
-                TSource[] array = _source.ToArray();
-                Array.Reverse<TSource>(array);
-                return array;
-            }
-
-            public List<TSource> ToList()
-            {
-                List<TSource> list = _source.ToList();
-                list.Reverse();
-                return list;
-            }
-
-            public int GetCount(bool onlyIfCheap)
-            {
-                if (onlyIfCheap)
-                {
-                    IIListProvider<TSource> listProv = _source as IIListProvider<TSource>;
-                    if (listProv != null)
-                    {
-                        return listProv.GetCount(onlyIfCheap: true);
-                    }
-
-                    if (!(_source is ICollection<TSource>) && !(_source is ICollection))
-                    {
-                        return -1;
-                    }
-                }
-
-                return _source.Count();
             }
         }
     }

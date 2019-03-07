@@ -1,4 +1,8 @@
-﻿namespace System.Diagnostics
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+namespace System.Diagnostics
 {
     public abstract partial class DiagnosticSource
     {
@@ -41,7 +45,7 @@
             // Stop sets the end time if it was unset, but we want it set before we issue the write
             // so we do it now.   
             if (activity.Duration == TimeSpan.Zero)
-                activity.SetEndTime(DateTime.UtcNow);
+                activity.SetEndTime(Activity.GetUtcNow());
             Write(activity.OperationName + ".Stop", args);
             activity.Stop();    // Resets Activity.Current (we want this after the Write)
         }

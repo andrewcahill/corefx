@@ -1160,8 +1160,7 @@ namespace System.Threading.Tasks.Tests
             // test exceptions
             Assert.Throws<ArgumentNullException>(
                () => Task.WaitAny((Task[])null));
-            Assert.Throws<ArgumentException>(
-               () => Task.WaitAny(new Task[] { null }));
+            AssertExtensions.Throws<ArgumentException>("tasks", () => Task.WaitAny(new Task[] { null }));
             Assert.Throws<ArgumentOutOfRangeException>(
                () => Task.WaitAny(new Task[] { Task.Factory.StartNew(() => { }) }, -2));
             Assert.Throws<ArgumentOutOfRangeException>(
@@ -1323,7 +1322,7 @@ namespace System.Threading.Tasks.Tests
         public static void RunTaskWaitAllTests()
         {
             Assert.Throws<ArgumentNullException>(() => Task.WaitAll((Task[])null));
-            Assert.Throws<ArgumentException>(() => Task.WaitAll(new Task[] { null }));
+            AssertExtensions.Throws<ArgumentException>("tasks", () => Task.WaitAll(new Task[] { null }));
             Assert.Throws<ArgumentOutOfRangeException>(() => Task.WaitAll(new Task[] { Task.Factory.StartNew(() => { }) }, -2));
             Assert.Throws<ArgumentOutOfRangeException>(() => Task.WaitAll(new Task[] { Task.Factory.StartNew(() => { }) }, TimeSpan.FromMilliseconds(-2)));
 
@@ -1344,17 +1343,17 @@ namespace System.Threading.Tasks.Tests
             int nSecondHalfCount = nTaskCount - nFirstHalfCount;
 
             //CancellationTokenSource ctsForSleepAndAckCancelAction = null; // this needs to be allocated every time sleepAndAckCancelAction is about to be used
-            Action<object> emptyAction = delegate (Object o) { };
-            Action<object> sleepAction = delegate (Object o) { for (int i = 0; i < 200; i++) { } };
-            Action<object> longAction = delegate (Object o) { for (int i = 0; i < 400; i++) { } };
+            Action<object> emptyAction = delegate (object o) { };
+            Action<object> sleepAction = delegate (object o) { for (int i = 0; i < 200; i++) { } };
+            Action<object> longAction = delegate (object o) { for (int i = 0; i < 400; i++) { } };
 
-            Action<object> sleepAndAckCancelAction = delegate (Object o)
+            Action<object> sleepAndAckCancelAction = delegate (object o)
             {
                 CancellationToken ct = (CancellationToken)o;
                 if (!ct.IsCancellationRequested) ct.WaitHandle.WaitOne();
                 throw new OperationCanceledException(ct);   // acknowledge
             };
-            Action<object> exceptionThrowAction = delegate (Object o) { throw new Exception(excpMsg); };
+            Action<object> exceptionThrowAction = delegate (object o) { throw new Exception(excpMsg); };
 
             Exception e = null;
 

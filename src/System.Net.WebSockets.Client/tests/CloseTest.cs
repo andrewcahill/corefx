@@ -18,8 +18,8 @@ namespace System.Net.WebSockets.Client.Tests
         public CloseTest(ITestOutputHelper output) : base(output) { }
 
         [OuterLoop] // TODO: Issue #11345
-        [ConditionalTheory(nameof(WebSocketsSupported)), MemberData(nameof(EchoServers))]
-        public async Task CloseAsync_ServerInitiatedClose_Success(Uri server)
+        [ConditionalTheory(nameof(WebSocketsSupported)), MemberData(nameof(EchoServersAndBoolean))]
+        public async Task CloseAsync_ServerInitiatedClose_Success(Uri server, bool useCloseOutputAsync)
         {
             const string closeWebSocketMetaCommand = ".close";
 
@@ -50,9 +50,11 @@ namespace System.Net.WebSockets.Client.Tests
                 Assert.Equal(closeWebSocketMetaCommand, cws.CloseStatusDescription);
 
                 // Send back close message to acknowledge server-initiated close.
-                _output.WriteLine("CloseAsync starting.");
-                await cws.CloseAsync(WebSocketCloseStatus.InvalidMessageType, string.Empty, cts.Token);
-                _output.WriteLine("CloseAsync done.");
+                _output.WriteLine("Close starting.");
+                await (useCloseOutputAsync ?
+                    cws.CloseOutputAsync(WebSocketCloseStatus.InvalidMessageType, string.Empty, cts.Token) :
+                    cws.CloseAsync(WebSocketCloseStatus.InvalidMessageType, string.Empty, cts.Token));
+                _output.WriteLine("Close done.");
                 Assert.Equal(WebSocketState.Closed, cws.State);
 
                 // Verify that there is no follow-up echo close message back from the server by
@@ -114,7 +116,7 @@ namespace System.Net.WebSockets.Client.Tests
                 var expectedException = new ArgumentException(expectedInnerMessage, "statusDescription");
                 string expectedMessage = expectedException.Message;
 
-                Assert.Throws<ArgumentException>(() =>
+                AssertExtensions.Throws<ArgumentException>("statusDescription", () =>
                     { Task t = cws.CloseAsync(WebSocketCloseStatus.NormalClosure, closeDescription, cts.Token); });
 
                 Assert.Equal(WebSocketState.Open, cws.State);
@@ -152,7 +154,7 @@ namespace System.Net.WebSockets.Client.Tests
 
                 await cws.CloseAsync(closeStatus, closeDescription, cts.Token);
                 Assert.Equal(closeStatus, cws.CloseStatus);
-                Assert.Equal(true, String.IsNullOrEmpty(cws.CloseStatusDescription));
+                Assert.Equal(true, string.IsNullOrEmpty(cws.CloseStatusDescription));
             }
         }
 
@@ -256,6 +258,7 @@ namespace System.Net.WebSockets.Client.Tests
             }
         }
 
+        [ActiveIssue(20362, TargetFrameworkMonikers.Netcoreapp)]
         [OuterLoop] // TODO: Issue #11345
         [ConditionalTheory(nameof(WebSocketsSupported)), MemberData(nameof(EchoServers))]
         public async Task CloseOutputAsync_DuringConcurrentReceiveAsync_ExpectedStates(Uri server)
@@ -268,29 +271,28 @@ namespace System.Net.WebSockets.Client.Tests
                 Assert.False(t.IsCompleted);
                 Assert.Equal(WebSocketState.Open, cws.State);
 
-                // Send a close frame.  After this completes, the state could be CloseSent if we haven't
-                // yet received the server response close frame, or it could be CloseReceived if we have.
+                // Send a close frame. After this completes, the state could be CloseSent if we haven't
+                // yet received the server's response close frame, or it could be Closed if we have.
                 await cws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
                 Assert.True(
-                    cws.State == WebSocketState.CloseSent || cws.State == WebSocketState.CloseReceived,
-                    $"Expected CloseSent or CloseReceived, got {cws.State}");
+                    cws.State == WebSocketState.CloseSent || cws.State == WebSocketState.Closed,
+                    $"Expected CloseSent or Closed, got {cws.State}");
 
-                // Then wait for the receive.  After this completes, the state is most likely CloseReceived,
-                // however there is a race condition between the our realizing that the send has completed
-                // and a fast server sending back a close frame, such that we could end up noticing the
-                // receive completion before we notice the send completion.
+                // Now wait for the receive. It will complete once the server's close frame arrives,
+                // at which point the ClientWebSocket's state should automatically transition to Closed.
                 WebSocketReceiveResult r = await t;
                 Assert.Equal(WebSocketMessageType.Close, r.MessageType);
-                Assert.True(
-                    cws.State == WebSocketState.CloseSent || cws.State == WebSocketState.CloseReceived,
-                    $"Expected CloseSent or CloseReceived, got {cws.State}");
+                Assert.Equal(WebSocketState.Closed, cws.State);
 
-                // Then close
+                // Closing an already-closed ClientWebSocket should be a no-op. Any other behavior (e.g., throwing exception)
+                // would give way to race conditions between (1) CloseAsync being called and (2) the server's response close
+                // frame being received after CloseOutputAsync.
                 await cws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
                 Assert.Equal(WebSocketState.Closed, cws.State);
 
-                // Another close should fail
-                await Assert.ThrowsAsync<WebSocketException>(() => cws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None));
+                // Call CloseAsync one more time on the already-closed ClientWebSocket for good measure. Again, this should be a no-op.
+                await cws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+                Assert.Equal(WebSocketState.Closed, cws.State);
             }
         }
 
@@ -314,7 +316,7 @@ namespace System.Net.WebSockets.Client.Tests
                     await t;
                     Assert.Equal(WebSocketState.Closed, cws.State);
                 }
-                catch (WebSocketException)
+                catch (OperationCanceledException)
                 {
                     Assert.Equal(WebSocketState.Aborted, cws.State);
                 }

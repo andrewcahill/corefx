@@ -35,7 +35,7 @@ namespace System.Collections.Concurrent.Tests
         /// </summary>
         protected override object CreateTValue(int seed) => CreateTKey(seed);
 
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables => new List<ModifyEnumerable>();
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations) => new List<ModifyEnumerable>();
 
         protected override bool Enumerator_Current_UndefinedOperation_Throws => false;
 
@@ -48,6 +48,8 @@ namespace System.Collections.Concurrent.Tests
         protected override bool ResetImplemented => false;
 
         protected override bool IDictionary_NonGeneric_Keys_Values_Enumeration_ResetImplemented => true;
+
+        protected override bool SupportsSerialization => false;
 
         protected override Type ICollection_NonGeneric_CopyTo_ArrayOfIncorrectReferenceType_ThrowType => typeof(ArrayTypeMismatchException);
 

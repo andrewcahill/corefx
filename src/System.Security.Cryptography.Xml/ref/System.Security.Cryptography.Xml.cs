@@ -116,6 +116,8 @@ namespace System.Security.Cryptography.Xml
         public const string XmlEncTripleDESUrl = "http://www.w3.org/2001/04/xmlenc#tripledes-cbc";
         public EncryptedXml() { }
         public EncryptedXml(System.Xml.XmlDocument document) { }
+        public EncryptedXml(System.Xml.XmlDocument document, System.Security.Policy.Evidence evidence) { }
+        public System.Security.Policy.Evidence DocumentEvidence { get { throw null; } set { } }
         public System.Text.Encoding Encoding { get { throw null; } set { } }
         public System.Security.Cryptography.CipherMode Mode { get { throw null; } set { } }
         public System.Security.Cryptography.PaddingMode Padding { get { throw null; } set { } }
@@ -393,7 +395,7 @@ namespace System.Security.Cryptography.Xml
         public bool CheckSignature(System.Security.Cryptography.AsymmetricAlgorithm key) { throw null; }
         public bool CheckSignature(System.Security.Cryptography.KeyedHashAlgorithm macAlg) { throw null; }
         public bool CheckSignature(System.Security.Cryptography.X509Certificates.X509Certificate2 certificate, bool verifySignatureOnly) { throw null; }
-        public bool CheckSignatureReturningKey(out System.Security.Cryptography.AsymmetricAlgorithm signingKey) { signingKey = default(System.Security.Cryptography.AsymmetricAlgorithm); throw null; }
+        public bool CheckSignatureReturningKey(out System.Security.Cryptography.AsymmetricAlgorithm signingKey) { throw null; }
         public void ComputeSignature() { }
         public void ComputeSignature(System.Security.Cryptography.KeyedHashAlgorithm macAlg) { }
         public virtual System.Xml.XmlElement GetIdElement(System.Xml.XmlDocument document, string idValue) { throw null; }

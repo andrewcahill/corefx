@@ -46,7 +46,7 @@ namespace System.Configuration
             {
                 if (s_machineConfigFilePath == null)
                 {
-                    string directory = RuntimeEnvironment.GetRuntimeDirectory();
+                    string directory = AppDomain.CurrentDomain.BaseDirectory;
                     s_machineConfigFilePath = Path.Combine(Path.Combine(directory, MachineConfigSubdirectory),
                         MachineConfigFilename);
                 }
@@ -309,7 +309,7 @@ namespace System.Configuration
         public override Stream OpenStreamForWrite(string streamName, string templateStreamName, ref object writeContext)
         {
             // only support files, not URIs
-            if (!IsFile(streamName)) throw ExceptionUtil.UnexpectedError("ClientConfigurationHost::OpenStreamForWrite");
+            if (!IsFile(streamName)) throw ExceptionUtil.UnexpectedError($"ClientConfigurationHost::OpenStreamForWrite '{streamName}' '{templateStreamName}'");
 
             return Host.OpenStreamForWrite(streamName, templateStreamName, ref writeContext);
         }

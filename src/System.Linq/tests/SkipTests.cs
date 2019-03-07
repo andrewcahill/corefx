@@ -75,14 +75,14 @@ namespace System.Linq.Tests
         [Fact]
         public void SkipThrowsOnNull()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<DateTime>)null).Skip(3));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<DateTime>)null).Skip(3));
         }
 
         [Fact]
         public void SkipThrowsOnNullIList()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((List<DateTime>)null).Skip(3));
-            Assert.Throws<ArgumentNullException>("source", () => ((IList<DateTime>)null).Skip(3));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((List<DateTime>)null).Skip(3));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IList<DateTime>)null).Skip(3));
         }
 
         [Fact]
@@ -119,7 +119,7 @@ namespace System.Linq.Tests
         public void SameResultsRepeatCallsIntQuery()
         {
             var q = GuaranteeNotIList(from x in new[] { 9999, 0, 888, -1, 66, -777, 1, 2, -12345 }
-                    where x > Int32.MinValue
+                    where x > int.MinValue
                     select x);
 
             Assert.Equal(q.Skip(0), q.Skip(0));
@@ -138,8 +138,8 @@ namespace System.Linq.Tests
         [Fact]
         public void SameResultsRepeatCallsStringQuery()
         {
-            var q = GuaranteeNotIList(from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", String.Empty }
-                    where !String.IsNullOrEmpty(x)
+            var q = GuaranteeNotIList(from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", string.Empty }
+                    where !string.IsNullOrEmpty(x)
                     select x);
 
             Assert.Equal(q.Skip(0), q.Skip(0));
@@ -285,8 +285,8 @@ namespace System.Linq.Tests
             Assert.Equal(3, remaining.ElementAt(0));
             Assert.Equal(4, remaining.ElementAt(1));
             Assert.Equal(6, remaining.ElementAt(3));
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(-1));
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(4));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(-1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(4));
         }
 
         [Fact]
@@ -297,8 +297,8 @@ namespace System.Linq.Tests
             Assert.Equal(3, remaining.ElementAt(0));
             Assert.Equal(4, remaining.ElementAt(1));
             Assert.Equal(6, remaining.ElementAt(3));
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(-1));
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(4));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(-1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => remaining.ElementAt(4));
         }
 
         [Fact]

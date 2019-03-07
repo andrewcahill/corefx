@@ -12,7 +12,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Security.Permissions;
 using System.Xml;
 using Microsoft.Win32;
 
@@ -335,7 +334,7 @@ namespace System.Security.Cryptography.Xml
                 // Check key usages to make sure it is good for signing.
                 foreach (X509Extension extension in certificate.Extensions)
                 {
-                    if (string.Compare(extension.Oid.Value, "2.5.29.15" /* szOID_KEY_USAGE */, StringComparison.OrdinalIgnoreCase) == 0)
+                    if (string.Equals(extension.Oid.Value, "2.5.29.15" /* szOID_KEY_USAGE */, StringComparison.OrdinalIgnoreCase))
                     {
                         X509KeyUsageExtension keyUsage = new X509KeyUsageExtension();
                         keyUsage.CopyFrom(extension);
@@ -401,7 +400,7 @@ namespace System.Security.Cryptography.Xml
                 {
                     // Default to RSA-SHA1
                     if (SignedInfo.SignatureMethod == null)
-                        SignedInfo.SignatureMethod = XmlDsigRSASHA1Url;
+                        SignedInfo.SignatureMethod = XmlDsigRSASHA256Url;
                 }
                 else
                 {
@@ -410,7 +409,7 @@ namespace System.Security.Cryptography.Xml
             }
 
             // See if there is a signature description class defined in the Config file
-            SignatureDescription signatureDescription = CryptoHelpers.CreateFromName(SignedInfo.SignatureMethod) as SignatureDescription;
+            SignatureDescription signatureDescription = CryptoHelpers.CreateFromName<SignatureDescription>(SignedInfo.SignatureMethod);
             if (signatureDescription == null)
                 throw new CryptographicException(SR.Cryptography_Xml_SignatureDescriptionNotCreated);
             HashAlgorithm hashAlg = signatureDescription.CreateDigest();
@@ -653,7 +652,7 @@ namespace System.Security.Cryptography.Xml
             }
 
             // See if we're signed witn an HMAC algorithm
-            HMAC hmac = CryptoHelpers.CreateFromName(SignatureMethod) as HMAC;
+            HMAC hmac = CryptoHelpers.CreateFromName<HMAC>(SignatureMethod);
             if (hmac == null)
             {
                 // We aren't signed with an HMAC algorithm, so we cannot have a truncated HMAC
@@ -790,7 +789,8 @@ namespace System.Security.Cryptography.Xml
 
         private byte[] GetC14NDigest(HashAlgorithm hash)
         {
-            if (!_bCacheValid || !SignedInfo.CacheValid)
+            bool isKeyedHashAlgorithm = hash is KeyedHashAlgorithm;
+            if (isKeyedHashAlgorithm || !_bCacheValid || !SignedInfo.CacheValid)
             {
                 string baseUri = (_containingDocument == null ? null : _containingDocument.BaseURI);
                 XmlResolver resolver = (_bResolverSet ? _xmlResolver : new XmlSecureResolver(new XmlUrlResolver(), baseUri));
@@ -810,7 +810,7 @@ namespace System.Security.Cryptography.Xml
                 SignedXmlDebugLog.LogCanonicalizedOutput(this, c14nMethodTransform);
                 _digestedSignedInfo = c14nMethodTransform.GetDigestedOutput(hash);
 
-                _bCacheValid = true;
+                _bCacheValid = !isKeyedHashAlgorithm;
             }
             return _digestedSignedInfo;
         }
@@ -910,7 +910,7 @@ namespace System.Security.Cryptography.Xml
             {
                 // If no DigestMethod has yet been set, default it to sha1
                 if (reference.DigestMethod == null)
-                    reference.DigestMethod = XmlDsigSHA1Url;
+                    reference.DigestMethod = Reference.DefaultDigestMethod;
 
                 SignedXmlDebugLog.LogSigningReference(this, reference);
 
@@ -1016,7 +1016,7 @@ namespace System.Security.Cryptography.Xml
 
             SignedXmlDebugLog.LogBeginCheckSignedInfo(this, m_signature.SignedInfo);
 
-            SignatureDescription signatureDescription = CryptoHelpers.CreateFromName(SignatureMethod) as SignatureDescription;
+            SignatureDescription signatureDescription = CryptoHelpers.CreateFromName<SignatureDescription>(SignatureMethod);
             if (signatureDescription == null)
                 throw new CryptographicException(SR.Cryptography_Xml_SignatureDescriptionNotCreated);
 

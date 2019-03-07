@@ -2,12 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Globalization;
-    using System.Collections;
-
     public class ReadOnlyDirectoryServerCollection : ReadOnlyCollectionBase
     {
         internal ReadOnlyDirectoryServerCollection() { }
@@ -23,18 +21,12 @@ namespace System.DirectoryServices.ActiveDirectory
             }
         }
 
-        public DirectoryServer this[int index]
-        {
-            get
-            {
-                return (DirectoryServer)InnerList[index];
-            }
-        }
+        public DirectoryServer this[int index] => (DirectoryServer)InnerList[index];
 
         public bool Contains(DirectoryServer directoryServer)
         {
             if (directoryServer == null)
-                throw new ArgumentNullException("directoryServer");
+                throw new ArgumentNullException(nameof(directoryServer));
 
             for (int i = 0; i < InnerList.Count; i++)
             {
@@ -50,7 +42,7 @@ namespace System.DirectoryServices.ActiveDirectory
         public int IndexOf(DirectoryServer directoryServer)
         {
             if (directoryServer == null)
-                throw new ArgumentNullException("directoryServer");
+                throw new ArgumentNullException(nameof(directoryServer));
 
             for (int i = 0; i < InnerList.Count; i++)
             {
@@ -68,19 +60,10 @@ namespace System.DirectoryServices.ActiveDirectory
             InnerList.CopyTo(directoryServers, index);
         }
 
-        internal int Add(DirectoryServer server)
-        {
-            return InnerList.Add(server);
-        }
+        internal int Add(DirectoryServer server) => InnerList.Add(server);
 
-        internal void AddRange(ICollection servers)
-        {
-            InnerList.AddRange(servers);
-        }
+        internal void AddRange(ICollection servers) => InnerList.AddRange(servers);
 
-        internal void Clear()
-        {
-            InnerList.Clear();
-        }
+        internal void Clear() => InnerList.Clear();
     }
 }

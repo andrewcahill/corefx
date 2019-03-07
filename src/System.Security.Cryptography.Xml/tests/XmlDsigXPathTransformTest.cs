@@ -1,3 +1,5 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// See the LICENSE file in the project root for more information
 //
 // XmlDsigXPathTransformTest.cs - Test Cases for XmlDsigXPathTransform
 //
@@ -212,7 +214,7 @@ namespace System.Security.Cryptography.Xml.Tests
         public void UnsupportedOutput()
         {
             XmlDocument doc = new XmlDocument();
-            Assert.Throws<ArgumentException>(() => transform.GetOutput(doc.GetType()));
+            AssertExtensions.Throws<ArgumentException>("type", () => transform.GetOutput(doc.GetType()));
         }
 
         [Fact]

@@ -10,7 +10,7 @@ using System.Threading;
 
 namespace System.Data.Common
 {
-    public abstract class DbDataReader : MarshalByRefObject, IDataReader, IEnumerable
+    public abstract partial class DbDataReader : MarshalByRefObject, IDataReader, IEnumerable
     {
         protected DbDataReader() : base() { }
 
@@ -193,7 +193,7 @@ namespace System.Data.Common
             {
                 try
                 {
-                    return IsDBNull(ordinal) ? ADP.s_trueTask : ADP.s_falseTask;
+                    return IsDBNull(ordinal) ? ADP.TrueTask : ADP.FalseTask;
                 }
                 catch (Exception e)
                 {
@@ -218,7 +218,7 @@ namespace System.Data.Common
             {
                 try
                 {
-                    return Read() ? ADP.s_trueTask : ADP.s_falseTask;
+                    return Read() ? ADP.TrueTask : ADP.FalseTask;
                 }
                 catch (Exception e)
                 {
@@ -239,7 +239,7 @@ namespace System.Data.Common
             {
                 try
                 {
-                    return NextResult() ? ADP.s_trueTask : ADP.s_falseTask;
+                    return NextResult() ? ADP.TrueTask : ADP.FalseTask;
                 }
                 catch (Exception e)
                 {

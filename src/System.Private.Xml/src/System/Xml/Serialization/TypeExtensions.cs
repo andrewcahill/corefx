@@ -4,6 +4,7 @@
 
 namespace System.Xml.Serialization
 {
+    using System;
     using System.Reflection;
 
     internal static class TypeExtensions

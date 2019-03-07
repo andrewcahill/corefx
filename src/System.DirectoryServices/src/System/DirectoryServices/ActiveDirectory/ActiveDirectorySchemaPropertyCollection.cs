@@ -2,20 +2,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+using System.Runtime.InteropServices;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Collections;
-    using System.Globalization;
-    using System.Runtime.InteropServices;
-
     public class ActiveDirectorySchemaPropertyCollection : CollectionBase
     {
         private DirectoryEntry _classEntry = null;
-        private string _propertyName = null;
-        private ActiveDirectorySchemaClass _schemaClass = null;
-        private bool _isBound = false;
-        private DirectoryContext _context = null;
+        private readonly string _propertyName = null;
+        private readonly ActiveDirectorySchemaClass _schemaClass = null;
+        private readonly bool _isBound = false;
+        private readonly DirectoryContext _context = null;
 
         internal ActiveDirectorySchemaPropertyCollection(DirectoryContext context,
                                                         ActiveDirectorySchemaClass schemaClass,
@@ -56,18 +54,15 @@ namespace System.DirectoryServices.ActiveDirectory
 
         public ActiveDirectorySchemaProperty this[int index]
         {
-            get
-            {
-                return (ActiveDirectorySchemaProperty)List[index];
-            }
+            get => (ActiveDirectorySchemaProperty)List[index];
             set
             {
                 if (value == null)
-                    throw new ArgumentNullException("value");
+                    throw new ArgumentNullException(nameof(value));
 
                 if (!value.isBound)
                 {
-                    throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SchemaObjectNotCommitted , value.Name));
+                    throw new InvalidOperationException(SR.Format(SR.SchemaObjectNotCommitted , value.Name));
                 }
 
                 if (!Contains(value))
@@ -76,7 +71,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 else
                 {
-                    throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , value), "value");
+                    throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , value), nameof(value));
                 }
             }
         }
@@ -85,12 +80,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (schemaProperty == null)
             {
-                throw new ArgumentNullException("schemaProperty");
+                throw new ArgumentNullException(nameof(schemaProperty));
             }
 
             if (!schemaProperty.isBound)
             {
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SchemaObjectNotCommitted , schemaProperty.Name));
+                throw new InvalidOperationException(SR.Format(SR.SchemaObjectNotCommitted , schemaProperty.Name));
             }
 
             if (!Contains(schemaProperty))
@@ -99,7 +94,7 @@ namespace System.DirectoryServices.ActiveDirectory
             }
             else
             {
-                throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , schemaProperty), "schemaProperty");
+                throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , schemaProperty), nameof(schemaProperty));
             }
         }
 
@@ -107,14 +102,14 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (properties == null)
             {
-                throw new ArgumentNullException("properties");
+                throw new ArgumentNullException(nameof(properties));
             }
 
             foreach (ActiveDirectorySchemaProperty property in properties)
             {
                 if (property == null)
                 {
-                    throw new ArgumentException("properties");
+                    throw new ArgumentException(nameof(properties));
                 }
             }
 
@@ -128,14 +123,14 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (properties == null)
             {
-                throw new ArgumentNullException("properties");
+                throw new ArgumentNullException(nameof(properties));
             }
 
             foreach (ActiveDirectorySchemaProperty property in properties)
             {
                 if (property == null)
                 {
-                    throw new ArgumentException("properties");
+                    throw new ArgumentException(nameof(properties));
                 }
             }
 
@@ -151,14 +146,14 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (properties == null)
             {
-                throw new ArgumentNullException("properties");
+                throw new ArgumentNullException(nameof(properties));
             }
 
             foreach (ActiveDirectorySchemaProperty property in properties)
             {
                 if (property == null)
                 {
-                    throw new ArgumentException("properties");
+                    throw new ArgumentException(nameof(properties));
                 }
             }
 
@@ -174,12 +169,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (schemaProperty == null)
             {
-                throw new ArgumentNullException("schemaProperty");
+                throw new ArgumentNullException(nameof(schemaProperty));
             }
 
             if (!schemaProperty.isBound)
             {
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SchemaObjectNotCommitted , schemaProperty.Name));
+                throw new InvalidOperationException(SR.Format(SR.SchemaObjectNotCommitted , schemaProperty.Name));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -191,19 +186,19 @@ namespace System.DirectoryServices.ActiveDirectory
                     return;
                 }
             }
-            throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.NotFoundInCollection , schemaProperty), "schemaProperty");
+            throw new ArgumentException(SR.Format(SR.NotFoundInCollection , schemaProperty), nameof(schemaProperty));
         }
 
         public void Insert(int index, ActiveDirectorySchemaProperty schemaProperty)
         {
             if (schemaProperty == null)
             {
-                throw new ArgumentNullException("schemaProperty");
+                throw new ArgumentNullException(nameof(schemaProperty));
             }
 
             if (!schemaProperty.isBound)
             {
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SchemaObjectNotCommitted , schemaProperty.Name));
+                throw new InvalidOperationException(SR.Format(SR.SchemaObjectNotCommitted , schemaProperty.Name));
             }
 
             if (!Contains(schemaProperty))
@@ -212,7 +207,7 @@ namespace System.DirectoryServices.ActiveDirectory
             }
             else
             {
-                throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , schemaProperty), "schemaProperty");
+                throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , schemaProperty), nameof(schemaProperty));
             }
         }
 
@@ -220,12 +215,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (schemaProperty == null)
             {
-                throw new ArgumentNullException("schemaProperty");
+                throw new ArgumentNullException(nameof(schemaProperty));
             }
 
             if (!schemaProperty.isBound)
             {
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SchemaObjectNotCommitted , schemaProperty.Name));
+                throw new InvalidOperationException(SR.Format(SR.SchemaObjectNotCommitted , schemaProperty.Name));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -263,12 +258,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (schemaProperty == null)
             {
-                throw new ArgumentNullException("schemaProperty");
+                throw new ArgumentNullException(nameof(schemaProperty));
             }
 
             if (!schemaProperty.isBound)
             {
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SchemaObjectNotCommitted , schemaProperty.Name));
+                throw new InvalidOperationException(SR.Format(SR.SchemaObjectNotCommitted , schemaProperty.Name));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -369,15 +364,15 @@ namespace System.DirectoryServices.ActiveDirectory
             }
         }
 
-        protected override void OnValidate(Object value)
+        protected override void OnValidate(object value)
         {
-            if (value == null) throw new ArgumentNullException("value");
+            if (value == null) throw new ArgumentNullException(nameof(value));
 
             if (!(value is ActiveDirectorySchemaProperty))
-                throw new ArgumentException("value");
+                throw new ArgumentException(nameof(value));
 
             if (!((ActiveDirectorySchemaProperty)value).isBound)
-                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SchemaObjectNotCommitted , ((ActiveDirectorySchemaProperty)value).Name));
+                throw new InvalidOperationException(SR.Format(SR.SchemaObjectNotCommitted , ((ActiveDirectorySchemaProperty)value).Name));
         }
 
         internal string[] GetMultiValuedProperty()

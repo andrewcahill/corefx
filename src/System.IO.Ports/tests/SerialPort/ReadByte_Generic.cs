@@ -6,8 +6,10 @@ using System.Diagnostics;
 using System.IO.PortsTests;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Legacy.Support;
 using Xunit;
+using Microsoft.DotNet.XUnitExtensions;
 
 namespace System.IO.Ports.Tests
 {
@@ -68,7 +70,7 @@ namespace System.IO.Ports.Tests
             }
         }
 
-        [OuterLoop("Slow test")]
+        [Trait(XunitConstants.Category, XunitConstants.IgnoreForCI)]  // Timing-sensitive
         [ConditionalFact(nameof(HasOneSerialPort))]
         public void Timeout()
         {
@@ -85,7 +87,7 @@ namespace System.IO.Ports.Tests
             }
         }
 
-        [OuterLoop("Slow test")]
+        [Trait(XunitConstants.Category, XunitConstants.IgnoreForCI)]  // Timing-sensitive
         [ConditionalFact(nameof(HasOneSerialPort))]
         public void SuccessiveReadTimeoutNoData()
         {
@@ -112,7 +114,7 @@ namespace System.IO.Ports.Tests
             using (SerialPort com1 = new SerialPort(TCSupport.LocalMachineSerialInfo.FirstAvailablePortName))
             {
                 Random rndGen = new Random(-55);
-                Thread t = new Thread(WriteToCom1);
+                var t = new Task(WriteToCom1);
 
                 com1.ReadTimeout = rndGen.Next(minRandomTimeout, maxRandomTimeout);
                 com1.Encoding = new UTF8Encoding();
@@ -120,7 +122,7 @@ namespace System.IO.Ports.Tests
                 Debug.WriteLine("Verifying ReadTimeout={0} with successive call to read method and some data being received in the first call", com1.ReadTimeout);
                 com1.Open();
 
-                //Call WriteToCom1 asynchronously this will write to com1 some time before the following call 
+                //Call WriteToCom1 asynchronously this will write to com1 some time before the following call
                 //to a read method times out
                 t.Start();
                 try
@@ -131,9 +133,7 @@ namespace System.IO.Ports.Tests
                 {
                 }
 
-                //Wait for the thread to finish
-                while (t.IsAlive)
-                    Thread.Sleep(50);
+                TCSupport.WaitForTaskCompletion(t);
 
                 //Make sure there is no bytes in the buffer so the next call to read will timeout
                 com1.DiscardInBuffer();
@@ -158,12 +158,14 @@ namespace System.IO.Ports.Tests
             }
         }
 
+        [KnownFailure]
         [ConditionalFact(nameof(HasNullModem))]
         public void DefaultParityReplaceByte()
         {
             VerifyParityReplaceByte(-1, numRndByte - 2);
         }
 
+        [KnownFailure]
         [ConditionalFact(nameof(HasNullModem))]
         public void NoParityReplaceByte()
         {
@@ -173,7 +175,7 @@ namespace System.IO.Ports.Tests
             VerifyParityReplaceByte('\0', rndGen.Next(0, numRndByte - 1), new UTF32Encoding());
         }
 
-
+        [KnownFailure]
         [ConditionalFact(nameof(HasNullModem))]
         public void RNDParityReplaceByte()
         {
@@ -183,6 +185,7 @@ namespace System.IO.Ports.Tests
         }
 
 
+        [KnownFailure]
         [ConditionalFact(nameof(HasNullModem))]
         public void ParityErrorOnLastByte()
         {

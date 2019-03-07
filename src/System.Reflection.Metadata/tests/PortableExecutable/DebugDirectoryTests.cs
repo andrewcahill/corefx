@@ -167,10 +167,10 @@ namespace System.Reflection.PortableExecutable.Tests
         {
             var reader = new PEReader(new MemoryStream(Misc.Members));
 
-            Assert.Throws<ArgumentException>("entry", () => reader.ReadCodeViewDebugDirectoryData(new DebugDirectoryEntry(0, 0, 0, DebugDirectoryEntryType.Coff, 0, 0, 0)));
+            AssertExtensions.Throws<ArgumentException>("entry", () => reader.ReadCodeViewDebugDirectoryData(new DebugDirectoryEntry(0, 0, 0, DebugDirectoryEntryType.Coff, 0, 0, 0)));
             Assert.Throws<BadImageFormatException>(() => reader.ReadCodeViewDebugDirectoryData(new DebugDirectoryEntry(0, 0, 0, DebugDirectoryEntryType.CodeView, 0, 0, 0)));
 
-            Assert.Throws<ArgumentException>("entry", () => reader.ReadEmbeddedPortablePdbDebugDirectoryData(new DebugDirectoryEntry(0, 0, 0, DebugDirectoryEntryType.Coff, 0, 0, 0)));
+            AssertExtensions.Throws<ArgumentException>("entry", () => reader.ReadEmbeddedPortablePdbDebugDirectoryData(new DebugDirectoryEntry(0, 0, 0, DebugDirectoryEntryType.Coff, 0, 0, 0)));
             Assert.Throws<BadImageFormatException>(() => reader.ReadEmbeddedPortablePdbDebugDirectoryData(new DebugDirectoryEntry(0, 0, 0, DebugDirectoryEntryType.EmbeddedPortablePdb, 0, 0, 0)));
         }
 
@@ -362,6 +362,57 @@ namespace System.Reflection.PortableExecutable.Tests
             using (var block = new ByteArrayMemoryProvider(bytes9).GetMemoryBlock(0, 1))
             {
                 Assert.Throws<BadImageFormatException>(() => PEReader.DecodeEmbeddedPortablePdbDebugDirectoryData(block));
+            }
+        }
+
+        [Fact]
+        public void PdbChecksum()
+        {
+            var bytes = ImmutableArray.Create(new byte[]
+            {
+                (byte)'A', (byte)'L', (byte)'G', 0, // AlgorithmName
+                0x01, 0x02, 0x03, 0x04, 0x05 // checksum
+            });
+
+            using (var block = new ByteArrayMemoryProvider(bytes).GetMemoryBlock(0, bytes.Length))
+            {
+                var data = PEReader.DecodePdbChecksumDebugDirectoryData(block);
+                Assert.Equal("ALG", data.AlgorithmName);
+                AssertEx.Equal(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 }, data.Checksum);
+            }
+        }
+
+        [Theory]
+        [InlineData(new byte[]
+        {
+            0, // AlgorithmName
+            0x01, 0x02, 0x03, 0x04, 0x05 // checksum
+        })]
+        [InlineData(new byte[]
+        {
+            0x01,
+            0x01, 0x02, 0x03, 0x04, 0x05
+        })]
+        [InlineData(new byte[]
+        {
+            0x01, 0x00
+        })]
+        [InlineData(new byte[]
+        {
+            0x00
+        })]
+        [InlineData(new byte[]
+        {
+            0x01
+        })]
+        [InlineData(new byte[0])]
+        public void PdbChecksum_Errors(byte[] blob)
+        {
+            var bytes = ImmutableArray.Create(blob);
+
+            using (var block = new ByteArrayMemoryProvider(bytes).GetMemoryBlock(0, bytes.Length))
+            {
+                Assert.Throws<BadImageFormatException>(() => PEReader.DecodePdbChecksumDebugDirectoryData(block));
             }
         }
     }

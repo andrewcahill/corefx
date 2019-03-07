@@ -13,39 +13,24 @@ namespace System.Linq
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
-            if (count <= 0)
-            {
-                return EmptyPartition<TSource>.Instance;
-            }
-
-            IPartition<TSource> partition = source as IPartition<TSource>;
-            if (partition != null)
-            {
-                return partition.Take(count);
-            }
-
-            IList<TSource> sourceList = source as IList<TSource>;
-            if (sourceList != null)
-            {
-                return new ListPartition<TSource>(sourceList, 0, count - 1);
-            }
-
-            return new EnumerablePartition<TSource>(source, 0, count - 1);
+            return count <= 0 ?
+                Empty<TSource>() :
+                TakeIterator<TSource>(source, count);
         }
 
         public static IEnumerable<TSource> TakeWhile<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate)
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             if (predicate == null)
             {
-                throw Error.ArgumentNull(nameof(predicate));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.predicate);
             }
 
             return TakeWhileIterator(source, predicate);
@@ -68,12 +53,12 @@ namespace System.Linq
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             if (predicate == null)
             {
-                throw Error.ArgumentNull(nameof(predicate));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.predicate);
             }
 
             return TakeWhileIterator(source, predicate);
@@ -102,15 +87,12 @@ namespace System.Linq
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
-            if (count <= 0)
-            {
-                return EmptyPartition<TSource>.Instance;
-            }
-
-            return TakeLastIterator(source, count);
+            return count <= 0 ?
+                Empty<TSource>() :
+                TakeLastIterator(source, count);
         }
 
         private static IEnumerable<TSource> TakeLastIterator<TSource>(IEnumerable<TSource> source, int count)
@@ -118,10 +100,18 @@ namespace System.Linq
             Debug.Assert(source != null);
             Debug.Assert(count > 0);
 
-            var queue = new Queue<TSource>();
+            Queue<TSource> queue;
 
             using (IEnumerator<TSource> e = source.GetEnumerator())
             {
+                if (!e.MoveNext())
+                {
+                    yield break;
+                }
+
+                queue = new Queue<TSource>();
+                queue.Enqueue(e.Current);
+
                 while (e.MoveNext())
                 {
                     if (queue.Count < count)

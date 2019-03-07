@@ -2,17 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Collections;
-    using System.Diagnostics;
-    using System.ComponentModel;
-    using System.Security.Principal;
-    using System.Runtime.InteropServices;
-    using System.Security.Permissions;
-    using System.Globalization;
-
     public class GlobalCatalog : DomainController
     {
         // private variables
@@ -39,18 +34,18 @@ namespace System.DirectoryServices.ActiveDirectory
 
             // check that the context argument is not null
             if (context == null)
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
 
             // target should be GC
             if (context.ContextType != DirectoryContextType.DirectoryServer)
             {
-                throw new ArgumentException(SR.TargetShouldBeGC, "context");
+                throw new ArgumentException(SR.TargetShouldBeGC, nameof(context));
             }
 
             // target should be a server
             if (!(context.isServer()))
             {
-                throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
+                throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
             }
 
             //  work with copy of the context
@@ -65,14 +60,14 @@ namespace System.DirectoryServices.ActiveDirectory
                 DirectoryEntry rootDSE = DirectoryEntryManager.GetDirectoryEntry(context, WellKnownDN.RootDSE);
                 if (!Utils.CheckCapability(rootDSE, Capability.ActiveDirectory))
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
                 }
 
                 gcDnsName = (string)PropertyManager.GetPropertyValue(context, rootDSE, PropertyManager.DnsHostName);
-                isGlobalCatalog = (bool)Boolean.Parse((string)PropertyManager.GetPropertyValue(context, rootDSE, PropertyManager.IsGlobalCatalogReady));
+                isGlobalCatalog = (bool)bool.Parse((string)PropertyManager.GetPropertyValue(context, rootDSE, PropertyManager.IsGlobalCatalogReady));
                 if (!isGlobalCatalog)
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
                 }
             }
             catch (COMException e)
@@ -81,7 +76,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
                 if (errorCode == unchecked((int)0x8007203a))
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.GCNotFound , context.Name), typeof(GlobalCatalog), context.Name);
                 }
                 else
                 {
@@ -96,12 +91,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if (context.ContextType != DirectoryContextType.Forest)
             {
-                throw new ArgumentException(SR.TargetShouldBeForest, "context");
+                throw new ArgumentException(SR.TargetShouldBeForest, nameof(context));
             }
 
             return FindOneWithCredentialValidation(context, null, 0);
@@ -111,17 +106,17 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if (context.ContextType != DirectoryContextType.Forest)
             {
-                throw new ArgumentException(SR.TargetShouldBeForest, "context");
+                throw new ArgumentException(SR.TargetShouldBeForest, nameof(context));
             }
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             return FindOneWithCredentialValidation(context, siteName, 0);
@@ -131,12 +126,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if (context.ContextType != DirectoryContextType.Forest)
             {
-                throw new ArgumentException(SR.TargetShouldBeForest, "context");
+                throw new ArgumentException(SR.TargetShouldBeForest, nameof(context));
             }
 
             return FindOneWithCredentialValidation(context, null, flag);
@@ -146,17 +141,17 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if (context.ContextType != DirectoryContextType.Forest)
             {
-                throw new ArgumentException(SR.TargetShouldBeForest, "context");
+                throw new ArgumentException(SR.TargetShouldBeForest, nameof(context));
             }
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             return FindOneWithCredentialValidation(context, siteName, flag);
@@ -166,12 +161,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if (context.ContextType != DirectoryContextType.Forest)
             {
-                throw new ArgumentException(SR.TargetShouldBeForest, "context");
+                throw new ArgumentException(SR.TargetShouldBeForest, nameof(context));
             }
 
             //  work with copy of the context
@@ -184,17 +179,17 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (context == null)
             {
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
             }
 
             if (context.ContextType != DirectoryContextType.Forest)
             {
-                throw new ArgumentException(SR.TargetShouldBeForest, "context");
+                throw new ArgumentException(SR.TargetShouldBeForest, nameof(context));
             }
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             //  work with copy of the context
@@ -323,7 +318,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     }
                     else
                     {
-                        throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.GCNotFoundInForest , context.Name), typeof(GlobalCatalog), null);
+                        throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.GCNotFoundInForest , context.Name), typeof(GlobalCatalog), null);
                     }
                 }
                 else
@@ -353,7 +348,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     if (e.ErrorCode == unchecked((int)0x8007203a))
                     {
                         // server is down
-                        throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.GCNotFoundInForest , context.Name), typeof(GlobalCatalog), null);
+                        throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.GCNotFoundInForest , context.Name), typeof(GlobalCatalog), null);
                     }
                     else
                     {
@@ -379,13 +374,13 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName != null && siteName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
             }
 
             // check that the flags passed have only the valid bits set
             if (((long)flag & (~((long)LocatorOptions.AvoidSelf | (long)LocatorOptions.ForceRediscovery | (long)LocatorOptions.KdcRequired | (long)LocatorOptions.TimeServerRequired | (long)LocatorOptions.WriteableRequired))) != 0)
             {
-                throw new ArgumentException(SR.InvalidFlags, "flag");
+                throw new ArgumentException(SR.InvalidFlags, nameof(flag));
             }
 
             if (forestName == null)
@@ -413,12 +408,12 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (errorCode == NativeMethods.ERROR_NO_SUCH_DOMAIN)
             {
-                throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.GCNotFoundInForest , forestName), typeof(GlobalCatalog), null);
+                throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.GCNotFoundInForest , forestName), typeof(GlobalCatalog), null);
             }
             // this can only occur when flag is being explicitly passed (since the flags that we pass internally are valid)
             if (errorCode == NativeMethods.ERROR_INVALID_FLAGS)
             {
-                throw new ArgumentException(SR.InvalidFlags, "flag");
+                throw new ArgumentException(SR.InvalidFlags, nameof(flag));
             }
             else if (errorCode != 0)
             {
@@ -442,7 +437,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName != null && siteName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
             }
 
             foreach (string gcName in Utils.GetReplicaList(context, null /* not specific to any partition */, siteName, false /* isDefaultNC */, false /* isADAM */, true /* mustBeGC */))
@@ -458,14 +453,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             DirectoryEntry de = new DirectoryEntry("GC://" + Name);
 
-            if (DirectoryContext.ServerBindSupported)
-            {
-                de.AuthenticationType = Utils.DefaultAuthType | AuthenticationTypes.ServerBind;
-            }
-            else
-            {
-                de.AuthenticationType = Utils.DefaultAuthType;
-            }
+            de.AuthenticationType = Utils.DefaultAuthType | AuthenticationTypes.ServerBind;
 
             de.Username = context.UserName;
             de.Password = context.Password;

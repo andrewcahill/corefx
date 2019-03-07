@@ -5,7 +5,6 @@
 // Changes to this file must follow the http://aka.ms/api-review process.
 // ------------------------------------------------------------------------------
 
-
 namespace System.Net
 {
     [System.FlagsAttribute]
@@ -43,20 +42,24 @@ namespace System.Net
         public override int GetHashCode() { throw null; }
         public override string ToString() { throw null; }
     }
-    public partial class CookieCollection : System.Collections.ICollection, System.Collections.IEnumerable
+    public partial class CookieCollection : System.Collections.Generic.ICollection<System.Net.Cookie>, System.Collections.Generic.IEnumerable<System.Net.Cookie>, System.Collections.Generic.IReadOnlyCollection<System.Net.Cookie>, System.Collections.ICollection, System.Collections.IEnumerable
     {
         public CookieCollection() { }
         public int Count { get { throw null; } }
-        public System.Net.Cookie this[string name] { get { throw null; } }
-        public System.Net.Cookie this[int index] { get { throw null; } }
+        public bool IsReadOnly { get { throw null; } }
         public bool IsSynchronized { get { throw null; } }
+        public System.Net.Cookie this[int index] { get { throw null; } }
+        public System.Net.Cookie this[string name] { get { throw null; } }
         public object SyncRoot { get { throw null; } }
         public void Add(System.Net.Cookie cookie) { }
         public void Add(System.Net.CookieCollection cookies) { }
-        public System.Collections.IEnumerator GetEnumerator() { throw null; }
+        public void Clear() { }
+        public bool Contains(System.Net.Cookie cookie) { throw null; }
         public void CopyTo(System.Array array, int index) { }
-        public void CopyTo(Cookie[] array, int index) { }
-        public bool IsReadOnly { get { throw null; } }
+        public void CopyTo(System.Net.Cookie[] array, int index) { }
+        public System.Collections.IEnumerator GetEnumerator() { throw null; }
+        public bool Remove(System.Net.Cookie cookie) { throw null; }
+        System.Collections.Generic.IEnumerator<System.Net.Cookie> System.Collections.Generic.IEnumerable<System.Net.Cookie>.GetEnumerator() { throw null; }
     }
     public partial class CookieContainer
     {
@@ -64,19 +67,19 @@ namespace System.Net
         public const int DefaultCookieLimit = 300;
         public const int DefaultPerDomainCookieLimit = 20;
         public CookieContainer() { }
+        public CookieContainer(int capacity) { }
+        public CookieContainer(int capacity, int perDomainCapacity, int maxCookieSize) { }
         public int Capacity { get { throw null; } set { } }
         public int Count { get { throw null; } }
         public int MaxCookieSize { get { throw null; } set { } }
         public int PerDomainCapacity { get { throw null; } set { } }
+        public void Add(System.Net.Cookie cookie) { }
+        public void Add(System.Net.CookieCollection cookies) { }
         public void Add(System.Uri uri, System.Net.Cookie cookie) { }
         public void Add(System.Uri uri, System.Net.CookieCollection cookies) { }
         public string GetCookieHeader(System.Uri uri) { throw null; }
         public System.Net.CookieCollection GetCookies(System.Uri uri) { throw null; }
         public void SetCookies(System.Uri uri, string cookieHeader) { }
-        public CookieContainer(int capacity) { }
-        public CookieContainer(int capacity, int perDomainCapacity, int maxCookieSize) { }
-        public void Add(CookieCollection cookies) { }
-        public void Add(Cookie cookie) { }
     }
     public partial class CookieException : System.FormatException, System.Runtime.Serialization.ISerializable
     {
@@ -101,6 +104,8 @@ namespace System.Net
     [System.FlagsAttribute]
     public enum DecompressionMethods
     {
+        All = -1,
+        Brotli = 4,
         Deflate = 2,
         GZip = 1,
         None = 0,
@@ -126,40 +131,55 @@ namespace System.Net
     public enum HttpStatusCode
     {
         Accepted = 202,
+        AlreadyReported = 208,
         Ambiguous = 300,
         BadGateway = 502,
         BadRequest = 400,
         Conflict = 409,
         Continue = 100,
         Created = 201,
+        EarlyHints = 103,
         ExpectationFailed = 417,
+        FailedDependency = 424,
         Forbidden = 403,
         Found = 302,
         GatewayTimeout = 504,
         Gone = 410,
         HttpVersionNotSupported = 505,
+        IMUsed = 226,
+        InsufficientStorage = 507,
         InternalServerError = 500,
         LengthRequired = 411,
+        Locked = 423,
+        LoopDetected = 508,
         MethodNotAllowed = 405,
+        MisdirectedRequest = 421,
         Moved = 301,
         MovedPermanently = 301,
         MultipleChoices = 300,
+        MultiStatus = 207,
+        NetworkAuthenticationRequired = 511,
         NoContent = 204,
         NonAuthoritativeInformation = 203,
         NotAcceptable = 406,
+        NotExtended = 510,
         NotFound = 404,
         NotImplemented = 501,
         NotModified = 304,
         OK = 200,
         PartialContent = 206,
         PaymentRequired = 402,
+        PermanentRedirect = 308,
         PreconditionFailed = 412,
+        PreconditionRequired = 428,
+        Processing = 102,
         ProxyAuthenticationRequired = 407,
         Redirect = 302,
         RedirectKeepVerb = 307,
         RedirectMethod = 303,
         RequestedRangeNotSatisfiable = 416,
         RequestEntityTooLarge = 413,
+        RequestHeaderFieldsTooLarge = 431,
         RequestTimeout = 408,
         RequestUriTooLong = 414,
         ResetContent = 205,
@@ -167,11 +187,22 @@ namespace System.Net
         ServiceUnavailable = 503,
         SwitchingProtocols = 101,
         TemporaryRedirect = 307,
+        TooManyRequests = 429,
         Unauthorized = 401,
+        UnavailableForLegalReasons = 451,
+        UnprocessableEntity = 422,
         UnsupportedMediaType = 415,
         Unused = 306,
         UpgradeRequired = 426,
         UseProxy = 305,
+        VariantAlsoNegotiates = 506,
+    }
+    public static partial class HttpVersion
+    {
+        public static readonly System.Version Unknown;
+        public static readonly System.Version Version10;
+        public static readonly System.Version Version11;
+        public static readonly System.Version Version20;
     }
     public partial interface ICredentials
     {
@@ -193,6 +224,10 @@ namespace System.Net
         public IPAddress(byte[] address) { }
         public IPAddress(byte[] address, long scopeid) { }
         public IPAddress(long newAddress) { }
+        public IPAddress(System.ReadOnlySpan<byte> address) { }
+        public IPAddress(System.ReadOnlySpan<byte> address, long scopeid) { }
+        [System.ObsoleteAttribute("This property has been deprecated. It is address family dependent. Please use IPAddress.Equals method to perform comparisons. https://go.microsoft.com/fwlink/?linkid=14202")]
+        public long Address { get { throw null; } set { } }
         public System.Net.Sockets.AddressFamily AddressFamily { get { throw null; } }
         public bool IsIPv4MappedToIPv6 { get { throw null; } }
         public bool IsIPv6LinkLocal { get { throw null; } }
@@ -212,11 +247,13 @@ namespace System.Net
         public static short NetworkToHostOrder(short network) { throw null; }
         public static int NetworkToHostOrder(int network) { throw null; }
         public static long NetworkToHostOrder(long network) { throw null; }
+        public static System.Net.IPAddress Parse(System.ReadOnlySpan<char> ipString) { throw null; }
         public static System.Net.IPAddress Parse(string ipString) { throw null; }
         public override string ToString() { throw null; }
+        public bool TryFormat(System.Span<char> destination, out int charsWritten) { throw null; }
+        public static bool TryParse(System.ReadOnlySpan<char> ipString, out System.Net.IPAddress address) { throw null; }
         public static bool TryParse(string ipString, out System.Net.IPAddress address) { throw null; }
-        [Obsolete("This property has been deprecated. It is address family dependent. Please use IPAddress.Equals method to perform comparisons. http://go.microsoft.com/fwlink/?linkid=14202")]
-        public long Address { get { throw null; } set { } }
+        public bool TryWriteBytes(System.Span<byte> destination, out int bytesWritten) { throw null; }
     }
     public partial class IPEndPoint : System.Net.EndPoint
     {
@@ -230,8 +267,12 @@ namespace System.Net
         public override System.Net.EndPoint Create(System.Net.SocketAddress socketAddress) { throw null; }
         public override bool Equals(object comparand) { throw null; }
         public override int GetHashCode() { throw null; }
+        public static System.Net.IPEndPoint Parse(System.ReadOnlySpan<char> s) { throw null; }
+        public static System.Net.IPEndPoint Parse(string s) { throw null; }
         public override System.Net.SocketAddress Serialize() { throw null; }
         public override string ToString() { throw null; }
+        public static bool TryParse(System.ReadOnlySpan<char> s, out System.Net.IPEndPoint result) { throw null; }
+        public static bool TryParse(string s, out System.Net.IPEndPoint result) { throw null; }
     }
     public partial interface IWebProxy
     {
@@ -242,15 +283,15 @@ namespace System.Net
     public partial class NetworkCredential : System.Net.ICredentials, System.Net.ICredentialsByHost
     {
         public NetworkCredential() { }
-        public NetworkCredential(string userName, string password) { }
-        [System.CLSCompliant(false)]
+        [System.CLSCompliantAttribute(false)]
         public NetworkCredential(string userName, System.Security.SecureString password) { }
-        public NetworkCredential(string userName, string password, string domain) { }
-        [System.CLSCompliant(false)]
+        [System.CLSCompliantAttribute(false)]
         public NetworkCredential(string userName, System.Security.SecureString password, string domain) { }
+        public NetworkCredential(string userName, string password) { }
+        public NetworkCredential(string userName, string password, string domain) { }
         public string Domain { get { throw null; } set { } }
         public string Password { get { throw null; } set { } }
-        [System.CLSCompliant(false)]
+        [System.CLSCompliantAttribute(false)]
         public System.Security.SecureString SecurePassword { get { throw null; } set { } }
         public string UserName { get { throw null; } set { } }
         public System.Net.NetworkCredential GetCredential(string host, int port, string authenticationType) { throw null; }
@@ -272,28 +313,20 @@ namespace System.Net
         protected TransportContext() { }
         public abstract System.Security.Authentication.ExtendedProtection.ChannelBinding GetChannelBinding(System.Security.Authentication.ExtendedProtection.ChannelBindingKind kind);
     }
-
-    public static class HttpVersion
-    {
-        public static readonly Version Unknown = new Version(0, 0);
-        public static readonly Version Version10 = new Version(1, 0);
-        public static readonly Version Version11 = new Version(1, 1);
-        public static readonly Version Version20 = new Version(2, 0);
-    }
 }
 namespace System.Net.Cache
 {
     public enum RequestCacheLevel
     {
-        Default = 0,
         BypassCache = 1,
-        CacheOnly = 2,
         CacheIfAvailable = 3,
-        Revalidate = 4,
+        CacheOnly = 2,
+        Default = 0,
+        NoCacheNoStore = 6,
         Reload = 5,
-        NoCacheNoStore = 6
+        Revalidate = 4,
     }
-    public class RequestCachePolicy
+    public partial class RequestCachePolicy
     {
         public RequestCachePolicy() { }
         public RequestCachePolicy(System.Net.Cache.RequestCacheLevel level) { }
@@ -460,29 +493,30 @@ namespace System.Security.Authentication
         Sha1 = 32772,
         Sha256 = 32780,
         Sha384 = 32781,
-        Sha512 = 32782
+        Sha512 = 32782,
     }
     [System.FlagsAttribute]
     public enum SslProtocols
     {
+        [System.ObsoleteAttribute("This value has been deprecated.  It is no longer supported. https://go.microsoft.com/fwlink/?linkid=14202")]
+        Default = 240,
         None = 0,
-        [Obsolete("This value has been deprecated.  It is no longer supported. http://go.microsoft.com/fwlink/?linkid=14202")]
+        [System.ObsoleteAttribute("This value has been deprecated.  It is no longer supported. https://go.microsoft.com/fwlink/?linkid=14202")]
         Ssl2 = 12,
-        [Obsolete("This value has been deprecated.  It is no longer supported. http://go.microsoft.com/fwlink/?linkid=14202")]
+        [System.ObsoleteAttribute("This value has been deprecated.  It is no longer supported. https://go.microsoft.com/fwlink/?linkid=14202")]
         Ssl3 = 48,
         Tls = 192,
         Tls11 = 768,
         Tls12 = 3072,
-        [Obsolete("This value has been deprecated.  It is no longer supported. http://go.microsoft.com/fwlink/?linkid=14202")]
-        Default = Ssl3 | Tls
+        Tls13 = 12288,
     }
 }
 namespace System.Security.Authentication.ExtendedProtection
 {
     public abstract partial class ChannelBinding : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid
     {
-        protected ChannelBinding() : base(default(bool)) { }
-        protected ChannelBinding(bool ownsHandle) : base(default(bool)) { }
+        protected ChannelBinding() : base (default(bool)) { }
+        protected ChannelBinding(bool ownsHandle) : base (default(bool)) { }
         public abstract int Size { get; }
     }
     public enum ChannelBindingKind

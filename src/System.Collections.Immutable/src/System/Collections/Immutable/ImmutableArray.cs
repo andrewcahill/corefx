@@ -137,7 +137,7 @@ namespace System.Collections.Immutable
         }
 
         /// <summary>
-        /// Creates an empty <see cref="ImmutableArray{T}"/>.
+        /// Creates an <see cref="ImmutableArray{T}"/> with the specified elements.
         /// </summary>
         /// <typeparam name="T">The type of element stored in the array.</typeparam>
         /// <param name="items">The elements to store in the array.</param>
@@ -393,6 +393,19 @@ namespace System.Collections.Immutable
             }
 
             return CreateRange(items);
+        }
+
+        /// <summary>
+        /// Returns an immutable copy of the current contents of the builder's collection.
+        /// </summary>
+        /// <param name="builder">The builder to create the immutable array from.</param>
+        /// <returns>An immutable array.</returns>
+        [Pure]
+        public static ImmutableArray<TSource> ToImmutableArray<TSource>(this ImmutableArray<TSource>.Builder builder)
+        {
+            Requires.NotNull(builder, nameof(builder));
+
+            return builder.ToImmutable();
         }
 
         /// <summary>

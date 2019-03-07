@@ -1,5 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<root>
+﻿<root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
     <xsd:element name="root" msdata:IsDataSet="true">
@@ -103,10 +102,16 @@
   <data name="net_collection_readonly" xml:space="preserve">
     <value>The collection is read-only.</value>
   </data>
+  <data name="net_nodefaultcreds" xml:space="preserve">
+    <value>Default credentials cannot be supplied for the {0} authentication scheme.</value>
+  </data>
   <data name="InvalidOperation_EnumFailedVersion" xml:space="preserve">
     <value>Collection was modified after the enumerator was instantiated.</value>
   </data>
   <data name="InvalidOperation_EnumOpCantHappen" xml:space="preserve">
-    <value>Enumerator is positioned before the first element or after the last element of the collection.</value>
+    <value>Enumeration has either not started or has already finished.</value>
+  </data>
+  <data name="bad_endpoint_string" xml:space="preserve">
+    <value>An invalid IPEndPoint was specified.</value>
   </data>
 </root>

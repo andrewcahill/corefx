@@ -14,10 +14,12 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Security;
 using System.Collections;
 using System.Runtime.ExceptionServices;
+
+#if USE_INTERNAL_THREADING
 using System.Threading.Tasks.Dataflow.Internal.Threading;
+#endif
 
 namespace System.Threading.Tasks.Dataflow.Internal
 {
@@ -333,7 +335,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         /// <summary>Creates a task we can cache for the desired Boolean result.</summary>
         /// <param name="value">The value of the Boolean.</param>
         /// <returns>A task that may be cached.</returns>
-        private static Task<Boolean> CreateCachedBooleanTask(bool value)
+        private static Task<bool> CreateCachedBooleanTask(bool value)
         {
             // AsyncTaskMethodBuilder<Boolean> caches tasks that are non-disposable.
             // By using these same tasks, we're a bit more robust against disposals,
@@ -419,7 +421,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         internal static bool IsValidTimeout(TimeSpan timeout)
         {
             long millisecondsTimeout = (long)timeout.TotalMilliseconds;
-            return millisecondsTimeout >= Timeout.Infinite && millisecondsTimeout <= Int32.MaxValue;
+            return millisecondsTimeout >= Timeout.Infinite && millisecondsTimeout <= int.MaxValue;
         }
 
         /// <summary>Gets the options to use for continuation tasks.</summary>

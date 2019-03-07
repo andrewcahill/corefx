@@ -34,9 +34,9 @@ namespace System.Runtime.Serialization
         private ISerializationSurrogateProvider _serializationSurrogateProvider;
         private bool _serializeReadOnlyTypes;
 
-        private static SerializationOption _option = SerializationOption.ReflectionAsBackup;
+        private static SerializationOption _option = IsReflectionBackupAllowed() ? SerializationOption.ReflectionAsBackup : SerializationOption.CodeGenOnly;
         private static bool _optionAlreadySet;
-        public static SerializationOption Option
+        internal static SerializationOption Option
         {
             get { return _option; }
             set
@@ -48,6 +48,17 @@ namespace System.Runtime.Serialization
                 _optionAlreadySet = true;
                 _option = value;
             }
+        }
+
+#if uapaot
+        [RemovableFeature(ReflectionBasedSerializationFeature.Name, UseNopBody = true)]
+#endif
+        private static bool IsReflectionBackupAllowed()
+        {
+            // The RemovableFeature annotation above is going to replace this with
+            // "return false" if reflection based serialization feature was removed
+            // at publishing time.
+            return true;
         }
 
         public DataContractSerializer(Type type)
@@ -92,16 +103,6 @@ namespace System.Runtime.Serialization
             Initialize(type, knownTypes, maxItemsInObjectGraph, ignoreExtensionDataObject, preserveObjectReferences, null, false);
         }
 
-        public DataContractSerializer(Type type, XmlDictionaryString rootName, XmlDictionaryString rootNamespace,
-            IEnumerable<Type> knownTypes,
-            int maxItemsInObjectGraph,
-            bool ignoreExtensionDataObject,
-            bool preserveObjectReferences,
-            DataContractResolver dataContractResolver)
-        {
-            Initialize(type, rootName, rootNamespace, knownTypes, maxItemsInObjectGraph, ignoreExtensionDataObject, preserveObjectReferences, /*dataContractSurrogate,*/ dataContractResolver, false);
-        }
-
         public DataContractSerializer(Type type, DataContractSerializerSettings settings)
         {
             if (settings == null)
@@ -133,7 +134,7 @@ namespace System.Runtime.Serialization
             }
 
             if (maxItemsInObjectGraph < 0)
-                throw DiagnosticUtility.ExceptionUtility.ThrowHelperError(new ArgumentOutOfRangeException(nameof(maxItemsInObjectGraph), SR.Format(SR.ValueMustBeNonNegative)));
+                throw DiagnosticUtility.ExceptionUtility.ThrowHelperError(new ArgumentOutOfRangeException(nameof(maxItemsInObjectGraph), SR.ValueMustBeNonNegative));
             _maxItemsInObjectGraph = maxItemsInObjectGraph;
 
             _ignoreExtensionDataObject = ignoreExtensionDataObject;

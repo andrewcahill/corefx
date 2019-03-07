@@ -9,19 +9,24 @@ Intro to .NET Core
 Learn about .NET Core
 ====================
 
-- [[WIP] Official .NET Core Docs](http://dotnet.github.io/)
+- [Official .NET Core Docs](https://docs.microsoft.com/dotnet/core)
 
 Get .NET Core
 =============
 
 - [Get .NET Core SDK](https://www.microsoft.com/net/core)
 
+Architecture Docs
+=================
+
+- [.NET Core Globalization Invariant Mode](architecture/globalization-invariant-mode.md)
+- [Cross-Platform Cryptography](architecture/cross-platform-cryptography.md)
+
 Project Docs
 ============
 
 - [Developer Guide](project-docs/developer-guide.md)
 - [Performance Testing](project-docs/performance-tests.md)
-- [Project priorities](https://github.com/dotnet/coreclr/blob/master/Documentation/project-docs/project-priorities.md)
 - [Contributing to CoreFX](project-docs/contributing.md)
 - [Contributing to .NET Core](https://github.com/dotnet/coreclr/blob/master/Documentation/project-docs/contributing.md)
 - [Contributing Workflow](https://github.com/dotnet/coreclr/blob/master/Documentation/project-docs/contributing-workflow.md)

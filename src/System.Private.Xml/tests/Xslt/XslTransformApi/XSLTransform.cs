@@ -46,27 +46,30 @@ namespace System.Xml.Tests
     // Base class for test cases
     //
     ////////////////////////////////////////////////////////////////
-    public class XsltApiTestCaseBase
+    public class XsltApiTestCaseBase : FileCleanupTestBase
     {
-        // Generic data for all derived test cases
-        public String szXslNS = "http://www.w3.org/1999/XSL/Transform";
+        private const string XmlResolverDocumentName = "xmlResolver_document_function.xml";
+        private static readonly string s_temporaryResolverDocumentFullName = Path.Combine(Path.GetTempPath(), typeof(XsltApiTestCaseBase) + "_" + Path.GetRandomFileName());
+        private static readonly object s_temporaryResolverDocumentLock = new object();
 
-        public String szDefaultNS = "urn:my-object";
-        public String szEmpty = "";
-        public String szInvalid = "*?%(){}[]&!@#$";
-        public String szLongString = "ThisIsAVeryLongStringToBeStoredAsAVariableToDetermineHowLargeThisBufferForAVariableNameCanBeAndStillFunctionAsExpected";
-        public String szLongNS = "http://www.miocrosoft.com/this/is/a/very/long/namespace/uri/to/do/the/api/testing/for/xslt/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/";
-        public String[] szWhiteSpace = { "  ", "\n", "\t", "\r", "\t\n  \r\t" };
-        public String szSimple = "myArg";
+        // Generic data for all derived test cases
+        public string szXslNS = "http://www.w3.org/1999/XSL/Transform";
+
+        public string szDefaultNS = "urn:my-object";
+        public string szEmpty = "";
+        public string szInvalid = "*?%()\0{}[]&!@#$";
+        public string szLongString = "ThisIsAVeryLongStringToBeStoredAsAVariableToDetermineHowLargeThisBufferForAVariableNameCanBeAndStillFunctionAsExpected";
+        public string szLongNS = "http://www.miocrosoft.com/this/is/a/very/long/namespace/uri/to/do/the/api/testing/for/xslt/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/0123456789/";
+        public string[] szWhiteSpace = { "  ", "\n", "\t", "\r", "\t\n  \r\t" };
+        public string szSimple = "myArg";
 
         // Variables from init string
         private string _strPath;           // Path of the data files
 
         private string _httpPath;          // HTTP Path of the data files
-        private bool _fTrace;            // Should we write out the results of the transform?
 
         // Other global variables
-        protected string _strOutFile = "out.xml";        // File to create when using write transforms
+        protected string _strOutFile;        // File to create when using write transforms
 
 #pragma warning disable 0618
         protected XslTransform xslt;                           // Main XslTransform instance
@@ -78,15 +81,51 @@ namespace System.Xml.Tests
         protected bool _isInProc;          // Is the current test run in proc or /Host None?
 
         private ITestOutputHelper _output;
+
+        static XsltApiTestCaseBase()
+        {
+            // On uap access is denied to full path and the code below and related tests cannot run
+            if (!PlatformDetection.IsUap)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(s_temporaryResolverDocumentFullName));
+
+                // Replace absolute URI in xmlResolver_document_function.xml based on the environment
+                string xslFile = Path.Combine("TestFiles", FilePathUtil.GetTestDataPath(), "XsltApi", "xmlResolver_document_function_absolute_uri.xsl");
+                XmlDocument doc = new XmlDocument();
+                doc.Load(xslFile);
+                string xslString = doc.OuterXml.Replace("ABSOLUTE_URI", s_temporaryResolverDocumentFullName);
+                doc.LoadXml(xslString);
+                doc.Save(xslFile);
+            }
+        }
+
         public XsltApiTestCaseBase(ITestOutputHelper output)
         {
             // Make sure that we don't cache the value of the switch to enable testing
             AppContext.SetSwitch("TestSwitch.LocalAppContext.DisableCaching", true);
             _output = output;
+            _strOutFile = GetTestFilePath();
             this.Init(null);
         }
 
-        public TransformType GetTransformType(String s)
+        public void TestUsingTemporaryCopyOfResolverDocument(Action testAction)
+        {
+            lock (s_temporaryResolverDocumentLock)
+            {
+                try
+                {
+                    File.Copy(FullFilePath(XmlResolverDocumentName), s_temporaryResolverDocumentFullName, overwrite: true);
+                    testAction();
+                }
+                finally
+                {
+                    if (File.Exists(s_temporaryResolverDocumentFullName))
+                        File.Delete(s_temporaryResolverDocumentFullName);
+                }
+            }
+        }
+
+        public TransformType GetTransformType(string s)
         {
             if (s.EndsWith(",READER"))
                 return TransformType.Reader;
@@ -111,7 +150,7 @@ namespace System.Xml.Tests
             return myDefaultCredResolver;
         }
 
-        public InputType GetInputType(String s)
+        public InputType GetInputType(string s)
         {
             if (s.StartsWith("READER,"))
                 return InputType.Reader;
@@ -124,7 +163,7 @@ namespace System.Xml.Tests
             return InputType.URI;
         }
 
-        public DocType GetDocType(String s)
+        public DocType GetDocType(string s)
         {
             switch (s.ToUpper())
             {
@@ -139,7 +178,7 @@ namespace System.Xml.Tests
             }
         }
 
-        public ReaderType GetReaderType(String s)
+        public ReaderType GetReaderType(string s)
         {
             //XmlTextReader, XmlNodeReader, XmlValidatingReader, XsltReader
 
@@ -164,9 +203,6 @@ namespace System.Xml.Tests
 
         public void Init(object objParam)
         {
-            // Get parameter info from runtime variables passed to LTM
-            _fTrace = false;
-
             // FullFilePath and FullHttpPath attempt to normalize file paths, however
             // as an extra step we can normalize them here, when they are first read
             // from the LTM file.
@@ -177,15 +213,15 @@ namespace System.Xml.Tests
         }
 
         // Returns the full path of a file, based on LTM parameters
-        public String FullFilePath(String szFile)
+        public string FullFilePath(string szFile)
         {
             return FullFilePath(szFile, false);
         }
 
         // Returns the full, lower-cased path of a file, based on LTM parameters
-        public String FullFilePath(String szFile, bool normalizeToLower)
+        public string FullFilePath(string szFile, bool normalizeToLower)
         {
-            if (szFile == null || szFile == String.Empty)
+            if (szFile == null || szFile == string.Empty)
                 return szFile;
             // why is this check here?
             if (szFile.Length > 5)
@@ -200,9 +236,9 @@ namespace System.Xml.Tests
         }
 
         // Returns the full, lower-cased http path of a file, based on LTM parameters
-        public String FullHttpPath(String szFile)
+        public string FullHttpPath(string szFile)
         {
-            if (szFile == null || szFile == String.Empty)
+            if (szFile == null || szFile == string.Empty)
                 return szFile;
 
             szFile = _httpPath + szFile;
@@ -239,7 +275,7 @@ namespace System.Xml.Tests
         // --------------------------------------------------------------------------------------------------------------
         //  LoadXML
         //  -------------------------------------------------------------------------------------------------------------
-        public IXPathNavigable LoadXML(String strFileLocation, DocType _docType)
+        public IXPathNavigable LoadXML(string strFileLocation, DocType _docType)
         {
             switch (_docType)
             {
@@ -484,7 +520,7 @@ namespace System.Xml.Tests
         private static readonly object s_outFileMemoryLock = new object();
 
 #pragma warning disable 0618
-        public void CallTransform(XslTransform xslt, String szFullFilename, String _strOutFile)
+        public void CallTransform(XslTransform xslt, string szFullFilename, string _strOutFile)
         {
             lock (s_outFileMemoryLock)
             {
@@ -492,7 +528,7 @@ namespace System.Xml.Tests
             }
         }
 
-        public void CallTransform(XslTransform xslt, String szFullFilename, String _strOutFile, XmlResolver resolver)
+        public void CallTransform(XslTransform xslt, string szFullFilename, string _strOutFile, XmlResolver resolver)
         {
             lock (s_outFileMemoryLock)
             {
@@ -815,33 +851,6 @@ namespace System.Xml.Tests
                         }
                         break;
                 }
-                return 1;
-            }
-        }
-
-        // --------------------------------------------------------------------------------------------------------------
-        //  CheckResult
-        //  -------------------------------------------------------------------------------------------------------------
-        public int CheckResult(double szExpResult, TransformType transformType)
-        {
-            lock (s_outFileMemoryLock)
-            {
-                double checksumActual;
-                CXsltChecksum check = new CXsltChecksum(_fTrace, _output);
-
-                if (transformType == TransformType.Reader)
-                    checksumActual = check.Calc(xrXSLT);
-                else
-                    checksumActual = check.Calc(_strOutFile);
-
-                if (szExpResult != checksumActual || _fTrace)
-                {
-                    _output.WriteLine("XML: {0}", check.Xml);
-                    _output.WriteLine("Actual checksum: {0}, Expected: {1}", checksumActual, szExpResult);
-                }
-                if (szExpResult != checksumActual)
-                    return 0;
-
                 return 1;
             }
         }

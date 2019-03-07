@@ -3,16 +3,17 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Serialization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Security.Authentication;
-using System.Security.Permissions;
 
 namespace System.DirectoryServices.AccountManagement
 {
-    [Serializable()]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.DirectoryServices.AccountManagement, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     abstract public class PrincipalException : SystemException
     {
         internal PrincipalException() : base() { }
@@ -25,10 +26,12 @@ namespace System.DirectoryServices.AccountManagement
 
         protected PrincipalException(SerializationInfo info, StreamingContext context) :
                     base(info, context)
-        { }
+        {
+        }
     }
 
-    [Serializable()]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.DirectoryServices.AccountManagement, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]    
     public class MultipleMatchesException : PrincipalException
     {
         public MultipleMatchesException() : base() { }
@@ -41,10 +44,12 @@ namespace System.DirectoryServices.AccountManagement
 
         protected MultipleMatchesException(SerializationInfo info, StreamingContext context) :
                     base(info, context)
-        { }
+        {
+        }
     }
 
-    [Serializable()]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.DirectoryServices.AccountManagement, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class NoMatchingPrincipalException : PrincipalException
     {
         public NoMatchingPrincipalException() : base() { }
@@ -57,10 +62,13 @@ namespace System.DirectoryServices.AccountManagement
 
         protected NoMatchingPrincipalException(SerializationInfo info, StreamingContext context) :
                     base(info, context)
-        { }
+        {
+            throw new PlatformNotSupportedException();
+        }
     }
 
-    [Serializable()]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.DirectoryServices.AccountManagement, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class PasswordException : PrincipalException
     {
         public PasswordException() : base() { }
@@ -73,10 +81,12 @@ namespace System.DirectoryServices.AccountManagement
 
         protected PasswordException(SerializationInfo info, StreamingContext context) :
                     base(info, context)
-        { }
+        {
+        }
     }
 
-    [Serializable()]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.DirectoryServices.AccountManagement, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class PrincipalExistsException : PrincipalException
     {
         public PrincipalExistsException() : base() { }
@@ -89,10 +99,12 @@ namespace System.DirectoryServices.AccountManagement
 
         protected PrincipalExistsException(SerializationInfo info, StreamingContext context) :
                     base(info, context)
-        { }
+        {
+        }
     }
 
-    [Serializable()]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.DirectoryServices.AccountManagement, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class PrincipalServerDownException : PrincipalException
     {
         private int _errorCode = 0;
@@ -124,20 +136,19 @@ namespace System.DirectoryServices.AccountManagement
                     base(info, context)
         {
             _errorCode = info.GetInt32("errorCode");
-            _serverName = (string)info.GetValue("serverName", typeof(String));
+            _serverName = (string)info.GetValue("serverName", typeof(string));
         }
 
-        [System.Security.SecurityCritical]
-        [SecurityPermission(System.Security.Permissions.SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.SerializationFormatter)]
         public override void GetObjectData(SerializationInfo info, StreamingContext context)
         {
-            info.AddValue("errorCode", _errorCode);
-            info.AddValue("serverName", _serverName, typeof(String));
             base.GetObjectData(info, context);
+            info.AddValue("errorCode", _errorCode);
+            info.AddValue("serverName", _serverName, typeof(string));
         }
     }
 
-    [Serializable()]
+    [Serializable]
+    [System.Runtime.CompilerServices.TypeForwardedFrom("System.DirectoryServices.AccountManagement, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
     public class PrincipalOperationException : PrincipalException
     {
         private int _errorCode = 0;
@@ -165,12 +176,10 @@ namespace System.DirectoryServices.AccountManagement
             _errorCode = info.GetInt32("errorCode");
         }
 
-        [System.Security.SecurityCritical]
-        [SecurityPermission(System.Security.Permissions.SecurityAction.LinkDemand, Flags = SecurityPermissionFlag.SerializationFormatter)]
         public override void GetObjectData(SerializationInfo info, StreamingContext context)
         {
-            info.AddValue("errorCode", _errorCode);
             base.GetObjectData(info, context);
+            info.AddValue("errorCode", _errorCode);
         }
 
         public int ErrorCode
@@ -284,13 +293,11 @@ namespace System.DirectoryServices.AccountManagement
             return exception;
         }
 
-        [System.Security.SecuritySafeCritical]
         internal static Exception GetExceptionFromErrorCode(int errorCode)
         {
             return GetExceptionFromErrorCode(errorCode, null);
         }
 
-        [System.Security.SecurityCritical]
         internal static Exception GetExceptionFromErrorCode(int errorCode, string targetName)
         {
             string errorMsg = GetErrorMessage(errorCode, false);
@@ -313,7 +320,6 @@ namespace System.DirectoryServices.AccountManagement
             }
         }
 
-        [System.Security.SecurityCritical]
         internal static string GetErrorMessage(int errorCode, bool hresult)
         {
             uint temp = (uint)errorCode;
@@ -321,22 +327,8 @@ namespace System.DirectoryServices.AccountManagement
             {
                 temp = ((((temp) & 0x0000FFFF) | (7 << 16) | 0x80000000));
             }
-            string errorMsg = "";
-            StringBuilder sb = new StringBuilder(256);
-            int result = UnsafeNativeMethods.FormatMessageW(UnsafeNativeMethods.FORMAT_MESSAGE_IGNORE_INSERTS |
-                                       UnsafeNativeMethods.FORMAT_MESSAGE_FROM_SYSTEM |
-                                       UnsafeNativeMethods.FORMAT_MESSAGE_ARGUMENT_ARRAY,
-                                       IntPtr.Zero, (int)temp, 0, sb, sb.Capacity + 1, IntPtr.Zero);
-            if (result != 0)
-            {
-                errorMsg = sb.ToString(0, result);
-            }
-            else
-            {
-                errorMsg = StringResources.DSUnknown + Convert.ToString(temp, 16);
-            }
 
-            return errorMsg;
+            return new Win32Exception((int)temp).Message;
         }
     }
 }

@@ -92,7 +92,7 @@ namespace System.Net
                     }
                     else
                     {
-                        throw new IOException(SR.Format(SR.net_io_readfailure, SR.Format(SR.net_io_connectionclosed)));
+                        throw new IOException(SR.Format(SR.net_io_readfailure, SR.net_io_connectionclosed));
                     }
                 }
 
@@ -115,7 +115,7 @@ namespace System.Net
                 bytesRead = Transport.Read(buffer, offset, buffer.Length - offset);
                 if (bytesRead == 0)
                 {
-                    throw new IOException(SR.Format(SR.net_io_readfailure, SR.Format(SR.net_io_connectionclosed)));
+                    throw new IOException(SR.Format(SR.net_io_readfailure, SR.net_io_connectionclosed));
                 }
 
                 offset += bytesRead;
@@ -238,7 +238,7 @@ namespace System.Net
                         if (payloadSize < 0)
                         {
                             // Let's call user callback and he call us back and we will throw
-                            workerResult.InvokeCallback(new System.IO.IOException(SR.Format(SR.net_frame_read_size)));
+                            workerResult.InvokeCallback(new System.IO.IOException(SR.net_frame_read_size));
                         }
 
                         if (payloadSize == 0)
@@ -305,7 +305,7 @@ namespace System.Net
 
             if (workerResult.Result is Exception e)
             {
-                ExceptionDispatchInfo.Capture(e).Throw();
+                ExceptionDispatchInfo.Throw(e);
             }
 
             int size = (int)workerResult.Result;
@@ -451,7 +451,7 @@ namespace System.Net
 
                 if (workerResult.Result is Exception e)
                 {
-                    ExceptionDispatchInfo.Capture(e).Throw();
+                    ExceptionDispatchInfo.Throw(e);
                 }
             }
             else

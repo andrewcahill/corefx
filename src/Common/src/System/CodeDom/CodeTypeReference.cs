@@ -12,7 +12,6 @@ namespace System.CodeDom
 namespace System.Runtime.Serialization
 #endif
 {
-    [Serializable]
     [Flags]
 #if !FEATURE_SERIALIZATION
     public enum CodeTypeReferenceOptions
@@ -24,7 +23,6 @@ namespace System.Runtime.Serialization
         GenericTypeParameter = 0x00000002
     }
 
-    [Serializable]
 #if !FEATURE_SERIALIZATION
     public class CodeTypeReference : CodeObject
 #else
@@ -270,7 +268,7 @@ namespace System.Runtime.Serialization
             }
 
             // Now see if we have some arity.  baseType could be null if this is an array type. 
-            if (_baseType != null && _baseType.IndexOf('`') != -1)
+            if (_baseType != null && _baseType.IndexOf('`') != -1) // string.Contains(char) is .NetCore2.1+ specific
             {
                 _needsFixup = false;
             }

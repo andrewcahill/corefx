@@ -527,6 +527,18 @@ namespace System.Net.Security
 #endif
         }
 
+        public override async ValueTask DisposeAsync()
+        {
+            try
+            {
+                _negoState.Close();
+            }
+            finally
+            {
+                await base.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
         public override int Read(byte[] buffer, int offset, int count)
         {
 #if DEBUG
@@ -625,7 +637,7 @@ namespace System.Net.Security
                 {
                     if (e is IOException)
                     {
-                        ExceptionDispatchInfo.Capture(e).Throw();
+                        ExceptionDispatchInfo.Throw(e);
                     }
 
                     throw new IOException(SR.net_io_read, e);
@@ -698,7 +710,7 @@ namespace System.Net.Security
                 {
                     if (e is IOException)
                     {
-                        ExceptionDispatchInfo.Capture(e).Throw();
+                        ExceptionDispatchInfo.Throw(e);
                     }
 
                     throw new IOException(SR.net_io_write, e);

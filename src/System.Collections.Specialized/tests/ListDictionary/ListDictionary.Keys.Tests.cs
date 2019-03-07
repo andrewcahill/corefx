@@ -44,7 +44,7 @@ namespace System.Collections.Specialized.Tests
 
         protected override void AddToCollection(ICollection collection, int numberOfItemsToAdd) => Debug.Assert(false);
 
-        protected override IEnumerable<ModifyEnumerable> ModifyEnumerables => new List<ModifyEnumerable>();
+        protected override IEnumerable<ModifyEnumerable> GetModifyEnumerables(ModifyOperation operations) => new List<ModifyEnumerable>();
 
         [Theory]
         [MemberData(nameof(ValidCollectionSizes))]
@@ -90,6 +90,9 @@ namespace System.Collections.Specialized.Tests
         [MemberData(nameof(ValidCollectionSizes))]
         public override void ICollection_NonGeneric_CopyTo_NonZeroLowerBound(int count)
         {
+            if (!PlatformDetection.IsNonZeroLowerBoundArraySupported)
+                return;
+
             ICollection collection = NonGenericICollectionFactory(count);
 
             Array arr = Array.CreateInstance(typeof(object), new int[1] { count }, new int[1] { 2 });

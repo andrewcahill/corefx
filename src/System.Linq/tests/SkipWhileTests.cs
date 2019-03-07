@@ -28,13 +28,13 @@ namespace System.Linq.Tests
         [Fact]
         public void SkipWhileThrowsOnNull()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).SkipWhile(i => i < 40));
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).SkipWhile((i, idx) => i == idx));
-            Assert.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 20).SkipWhile((Func<int, int, bool>)null));
-            Assert.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 20).SkipWhile((Func<int, bool>)null));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).SkipWhile(i => i < 40));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).SkipWhile((i, idx) => i == idx));
+            AssertExtensions.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 20).SkipWhile((Func<int, int, bool>)null));
+            AssertExtensions.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 20).SkipWhile((Func<int, bool>)null));
         }
 
-        [ConditionalFact(nameof(PlatformDetection) + "." + nameof(PlatformDetection.IsNotWindowsSubsystemForLinux))] // https://github.com/Microsoft/BashOnWindows/issues/513
+        [Fact]
         public void SkipWhilePassesPredicateExceptionWhenEnumerated()
         {
             var source = Enumerable.Range(-2, 5).SkipWhile(i => 1 / i <= 0);
@@ -72,7 +72,7 @@ namespace System.Linq.Tests
         public void SameResultsRepeatCallsIntQuery()
         {
             var q = from x in new[] { 9999, 0, 888, -1, 66, -777, 1, 2, -12345 }
-                    where x > Int32.MinValue
+                    where x > int.MinValue
                     select x;
 
             Assert.Equal(q.SkipWhile(x => true), q.SkipWhile(x => true));
@@ -81,8 +81,8 @@ namespace System.Linq.Tests
         [Fact]
         public void SameResultsRepeatCallsStringQuery()
         {
-            var q = from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", String.Empty }
-                    where !String.IsNullOrEmpty(x)
+            var q = from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", string.Empty }
+                    where !string.IsNullOrEmpty(x)
                     select x;
 
             Assert.Equal(q.SkipWhile(x => true), q.SkipWhile(x => true));
@@ -94,11 +94,11 @@ namespace System.Linq.Tests
             int[] source = { 8, 3, 12, 4, 6, 10 };
             int[] expected = { 3, 12, 4, 6, 10 };
 
-            Assert.Equal(expected, source.SkipWhile((e, i) => e % 2 == 0));
+            Assert.Equal(expected, source.SkipWhile(e => e % 2 == 0));
         }
 
         [Fact]
-        public void PredicateManyFalseOnSecondInex()
+        public void PredicateManyFalseOnSecondIndex()
         {
             int[] source = { 8, 3, 12, 4, 6, 10 };
             int[] expected = { 3, 12, 4, 6, 10 };
@@ -112,7 +112,7 @@ namespace System.Linq.Tests
             int[] source = { 3, 2, 4, 12, 6 };
             int[] expected = { 3, 2, 4, 12, 6 };
 
-            Assert.Equal(expected, source.SkipWhile((e, i) => e % 2 == 0));
+            Assert.Equal(expected, source.SkipWhile(e => e % 2 == 0));
         }
 
         [Fact]

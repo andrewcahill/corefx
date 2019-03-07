@@ -2,19 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Text;
+using System.Collections;
+using System.Globalization;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Diagnostics;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Text;
-    using System.Threading;
-    using System.Collections;
-    using System.Globalization;
-    using System.ComponentModel;
-    using System.DirectoryServices;
-    using System.Runtime.InteropServices;
-    using System.Diagnostics;
-    using System.Security.Permissions;
-
     public enum ForestMode : int
     {
         Unknown = -1,
@@ -30,14 +26,14 @@ namespace System.DirectoryServices.ActiveDirectory
     public class Forest : IDisposable
     {
         // Private Variables
-        private DirectoryContext _context = null;
-        private DirectoryEntryManager _directoryEntryMgr = null;
-        private IntPtr _dsHandle = IntPtr.Zero;
-        private IntPtr _authIdentity = IntPtr.Zero;
+        private readonly DirectoryContext _context = null;
+        private readonly DirectoryEntryManager _directoryEntryMgr = null;
+        private readonly IntPtr _dsHandle = IntPtr.Zero;
+        private readonly IntPtr _authIdentity = IntPtr.Zero;
         private bool _disposed = false;
 
         // Internal variables corresponding to public properties
-        private string _forestDnsName = null;
+        private readonly string _forestDnsName = null;
         private ReadOnlySiteCollection _cachedSites = null;
         private DomainCollection _cachedDomains = null;
         private GlobalCatalogCollection _cachedGlobalCatalogs = null;
@@ -64,10 +60,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
         #region IDisposable
 
-        public void Dispose()
-        {
-            Dispose(true);
-        }
+        public void Dispose() => Dispose(true);
 
         // private Dispose method
         protected void Dispose(bool disposing)
@@ -99,13 +92,13 @@ namespace System.DirectoryServices.ActiveDirectory
 
             // check that the argument is not null
             if (context == null)
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
 
             // contexttype should be Forest or DirectoryServer
             if ((context.ContextType != DirectoryContextType.Forest) &&
                 (context.ContextType != DirectoryContextType.DirectoryServer))
             {
-                throw new ArgumentException(SR.TargetShouldBeServerORForest, "context");
+                throw new ArgumentException(SR.TargetShouldBeServerORForest, nameof(context));
             }
 
             if ((context.Name == null) && (!context.isRootDomain()))
@@ -124,7 +117,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     }
                     else
                     {
-                        throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.DCNotFound , context.Name), typeof(Forest), null);
+                        throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.DCNotFound , context.Name), typeof(Forest), null);
                     }
                 }
             }
@@ -141,7 +134,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 rootDSE = directoryEntryMgr.GetCachedDirectoryEntry(WellKnownDN.RootDSE);
                 if ((context.isServer()) && (!Utils.CheckCapability(rootDSE, Capability.ActiveDirectory)))
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.DCNotFound , context.Name), typeof(Forest), null);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.DCNotFound , context.Name), typeof(Forest), null);
                 }
                 rootDomainNC = (string)PropertyManager.GetPropertyValue(context, rootDSE, PropertyManager.RootDomainNamingContext);
             }
@@ -157,7 +150,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     }
                     else
                     {
-                        throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.DCNotFound , context.Name), typeof(Forest), null);
+                        throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.DCNotFound , context.Name), typeof(Forest), null);
                     }
                 }
                 else
@@ -178,13 +171,13 @@ namespace System.DirectoryServices.ActiveDirectory
             // check new functional level is valid or not
             if (forestMode < 0)
             {
-                throw new ArgumentException(SR.InvalidMode, "forestMode");
+                throw new ArgumentException(SR.InvalidMode, nameof(forestMode));
             }
 
             // new functional level should be higher than the old one
             if (forestMode <= ForestModeLevel)
             {
-                throw new ArgumentException(SR.InvalidMode, "forestMode");
+                throw new ArgumentException(SR.InvalidMode, nameof(forestMode));
             }
 
             // set the forest mode on AD 
@@ -201,7 +194,7 @@ namespace System.DirectoryServices.ActiveDirectory
             {
                 if (e.ErrorCode == unchecked((int)0x8007200A))
                 {
-                    throw new ArgumentException(SR.NoW2K3DCsInForest, "forestMode");
+                    throw new ArgumentException(SR.NoW2K3DCsInForest, nameof(forestMode));
                 }
                 else
                 {
@@ -225,21 +218,18 @@ namespace System.DirectoryServices.ActiveDirectory
             // check if forest mode is a valid enum value
             if (forestMode < ForestMode.Windows2000Forest)
             {
-                throw new InvalidEnumArgumentException("forestMode", (int)forestMode, typeof(ForestMode));
+                throw new InvalidEnumArgumentException(nameof(forestMode), (int)forestMode, typeof(ForestMode));
             }
 
             if (forestMode <= ForestMode)
             {
-                throw new ArgumentException(SR.InvalidMode, "forestMode");
+                throw new ArgumentException(SR.InvalidMode, nameof(forestMode));
             }
 
             RaiseForestFunctionalityLevel((int)forestMode);
         }
 
-        public override string ToString()
-        {
-            return Name;
-        }
+        public override string ToString() => Name;
 
         public GlobalCatalog FindGlobalCatalog()
         {
@@ -254,7 +244,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             return GlobalCatalog.FindOneInternal(_context, Name, siteName, 0);
@@ -273,7 +263,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             return GlobalCatalog.FindOneInternal(_context, Name, siteName, flag);
@@ -292,7 +282,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             return GlobalCatalog.FindAllInternal(_context, siteName);
@@ -314,12 +304,12 @@ namespace System.DirectoryServices.ActiveDirectory
 
             if (siteName == null)
             {
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
             }
 
             if (siteName.Length == 0)
             {
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
             }
 
             return new GlobalCatalogCollection(Locator.EnumerateDomainControllers(_context, Name, siteName, flag));
@@ -337,10 +327,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             TrustRelationshipInformationCollection collection = GetTrustsHelper(targetForestName);
             if (collection.Count != 0)
@@ -351,7 +341,7 @@ namespace System.DirectoryServices.ActiveDirectory
             else
             {
                 // trust relationship does not exist
-                throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.ForestTrustDoesNotExist , Name, targetForestName), typeof(TrustRelationshipInformation), null);
+                throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.ForestTrustDoesNotExist , Name, targetForestName), typeof(TrustRelationshipInformation), null);
             }
         }
 
@@ -360,10 +350,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             return TrustHelper.GetTrustedDomainInfoStatus(_context, Name, targetForestName, TRUST_ATTRIBUTE.TRUST_ATTRIBUTE_CROSS_ORGANIZATION, true);
         }
@@ -373,10 +363,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             TrustHelper.SetTrustedDomainInfoStatus(_context, Name, targetForestName, TRUST_ATTRIBUTE.TRUST_ATTRIBUTE_CROSS_ORGANIZATION, enable, true);
         }
@@ -386,10 +376,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             return TrustHelper.GetTrustedDomainInfoStatus(_context, Name, targetForestName, TRUST_ATTRIBUTE.TRUST_ATTRIBUTE_TREAT_AS_EXTERNAL, true);
         }
@@ -399,10 +389,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             TrustHelper.SetTrustedDomainInfoStatus(_context, Name, targetForestName, TRUST_ATTRIBUTE.TRUST_ATTRIBUTE_TREAT_AS_EXTERNAL, enable, true);
         }
@@ -412,10 +402,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             // delete local side of trust only
             TrustHelper.DeleteTrust(_context, Name, targetForestName, true);
@@ -426,7 +416,7 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForest == null)
-                throw new ArgumentNullException("targetForest");
+                throw new ArgumentNullException(nameof(targetForest));
 
             // first delete the trust on the remote side
             TrustHelper.DeleteTrust(targetForest.GetDirectoryContext(), targetForest.Name, Name, true);
@@ -440,10 +430,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             TrustHelper.VerifyTrust(_context, Name, targetForestName, true/*forest*/, TrustDirection.Outbound, false /*just TC verification*/, null /* no need to go to specific server*/);
         }
@@ -453,10 +443,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForest == null)
-                throw new ArgumentNullException("targetForest");
+                throw new ArgumentNullException(nameof(targetForest));
 
             if (direction < TrustDirection.Inbound || direction > TrustDirection.Bidirectional)
-                throw new InvalidEnumArgumentException("direction", (int)direction, typeof(TrustDirection));
+                throw new InvalidEnumArgumentException(nameof(direction), (int)direction, typeof(TrustDirection));
 
             // verify outbound trust first
             if ((direction & TrustDirection.Outbound) != 0)
@@ -467,7 +457,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 catch (ActiveDirectoryObjectNotFoundException)
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
                 }
             }
 
@@ -480,7 +470,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 catch (ActiveDirectoryObjectNotFoundException)
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
                 }
             }
         }
@@ -490,19 +480,19 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             if (direction < TrustDirection.Inbound || direction > TrustDirection.Bidirectional)
-                throw new InvalidEnumArgumentException("direction", (int)direction, typeof(TrustDirection));
+                throw new InvalidEnumArgumentException(nameof(direction), (int)direction, typeof(TrustDirection));
 
             if (trustPassword == null)
-                throw new ArgumentNullException("trustPassword");
+                throw new ArgumentNullException(nameof(trustPassword));
 
             if (trustPassword.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "trustPassword");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(trustPassword));
 
             // verify first that the target forest name is valid
             Locator.GetDomainControllerInfo(null, targetForestName, null, (long)(PrivateLocatorFlags.DirectoryServicesRequired | PrivateLocatorFlags.GCRequired));
@@ -517,10 +507,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForest == null)
-                throw new ArgumentNullException("targetForest");
+                throw new ArgumentNullException(nameof(targetForest));
 
             if (direction < TrustDirection.Inbound || direction > TrustDirection.Bidirectional)
-                throw new InvalidEnumArgumentException("direction", (int)direction, typeof(TrustDirection));
+                throw new InvalidEnumArgumentException(nameof(direction), (int)direction, typeof(TrustDirection));
 
             string password = TrustHelper.CreateTrustPassword();
 
@@ -542,16 +532,16 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             if (newTrustPassword == null)
-                throw new ArgumentNullException("newTrustPassword");
+                throw new ArgumentNullException(nameof(newTrustPassword));
 
             if (newTrustPassword.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "newTrustPassword");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(newTrustPassword));
 
             TrustHelper.UpdateTrust(_context, Name, targetForestName, newTrustPassword, true);
         }
@@ -561,19 +551,19 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForestName == null)
-                throw new ArgumentNullException("targetForestName");
+                throw new ArgumentNullException(nameof(targetForestName));
 
             if (targetForestName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "targetForestName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(targetForestName));
 
             if (newTrustDirection < TrustDirection.Inbound || newTrustDirection > TrustDirection.Bidirectional)
-                throw new InvalidEnumArgumentException("newTrustDirection", (int)newTrustDirection, typeof(TrustDirection));
+                throw new InvalidEnumArgumentException(nameof(newTrustDirection), (int)newTrustDirection, typeof(TrustDirection));
 
             if (newTrustPassword == null)
-                throw new ArgumentNullException("newTrustPassword");
+                throw new ArgumentNullException(nameof(newTrustPassword));
 
             if (newTrustPassword.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "newTrustPassword");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(newTrustPassword));
 
             TrustHelper.UpdateTrustDirection(_context, Name, targetForestName, newTrustPassword, true /*is forest*/, newTrustDirection);
         }
@@ -583,10 +573,10 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForest == null)
-                throw new ArgumentNullException("targetForest");
+                throw new ArgumentNullException(nameof(targetForest));
 
             if (newTrustDirection < TrustDirection.Inbound || newTrustDirection > TrustDirection.Bidirectional)
-                throw new InvalidEnumArgumentException("newTrustDirection", (int)newTrustDirection, typeof(TrustDirection));
+                throw new InvalidEnumArgumentException(nameof(newTrustDirection), (int)newTrustDirection, typeof(TrustDirection));
 
             // no we generate trust password
             string password = TrustHelper.CreateTrustPassword();
@@ -609,7 +599,7 @@ namespace System.DirectoryServices.ActiveDirectory
             CheckIfDisposed();
 
             if (targetForest == null)
-                throw new ArgumentNullException("targetForest");
+                throw new ArgumentNullException(nameof(targetForest));
 
             // first try to reset the secure channel
             try
@@ -638,14 +628,11 @@ namespace System.DirectoryServices.ActiveDirectory
             }
             catch (ActiveDirectoryObjectNotFoundException)
             {
-                throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
+                throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
             }
         }
 
-        public static Forest GetCurrentForest()
-        {
-            return Forest.GetForest(new DirectoryContext(DirectoryContextType.Forest));
-        }
+        public static Forest GetCurrentForest() => GetForest(new DirectoryContext(DirectoryContextType.Forest));
 
         #endregion public methods
 
@@ -806,10 +793,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
         #region private methods
 
-        internal DirectoryContext GetDirectoryContext()
-        {
-            return _context;
-        }
+        internal DirectoryContext GetDirectoryContext() => _context;
 
         private int GetForestModeLevel()
         {
@@ -824,7 +808,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 else
                 {
-                    forestModeValue = Int32.Parse((string)rootDSE.Properties[PropertyManager.ForestFunctionality].Value, NumberFormatInfo.InvariantInfo);
+                    forestModeValue = int.Parse((string)rootDSE.Properties[PropertyManager.ForestFunctionality].Value, NumberFormatInfo.InvariantInfo);
                 }
             }
             catch (COMException e)
@@ -864,7 +848,7 @@ namespace System.DirectoryServices.ActiveDirectory
 
                     default:
                         // should not happen since we are calling this only internally
-                        Debug.Assert(false, "Forest.GetRoleOwner: Invalid role type.");
+                        Debug.Fail("Forest.GetRoleOwner: Invalid role type.");
                         break;
                 }
 
@@ -1235,7 +1219,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 catch (ActiveDirectoryObjectNotFoundException)
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
                 }
             }
 
@@ -1248,7 +1232,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 catch (ActiveDirectoryObjectNotFoundException)
                 {
-                    throw new ActiveDirectoryObjectNotFoundException(String.Format(CultureInfo.CurrentCulture, SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
+                    throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.WrongTrustDirection , Name, targetForest.Name, direction), typeof(ForestTrustRelationshipInformation), null);
                 }
             }
         }

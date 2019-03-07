@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Configuration;
+using System.Configuration.Internal;
 using System.IO;
 using Xunit;
 
@@ -10,7 +12,7 @@ namespace System.ConfigurationTests
 {
     public class ImplicitMachineConfigTests
     {
-        [Fact]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsNotNetNativeRunningAsConsoleApp))]
         public void RuntimeAppSettingsAccessible()
         {
             var appSettings = ConfigurationManager.AppSettings;
@@ -33,7 +35,7 @@ namespace System.ConfigurationTests
         {
             // ConfigurationFileMap checks for existence in the constructor
             string missingFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".config");
-            Assert.Throws<ArgumentException>(() => new ConfigurationFileMap(missingFile));
+            AssertExtensions.Throws<ArgumentException>("machineConfigFilename", () => new ConfigurationFileMap(missingFile));
         }
 
         [Fact]
@@ -59,6 +61,25 @@ namespace System.ConfigurationTests
                 Assert.NotNull(config);
 
                 Assert.Null(config.AppSettings);
+            }
+        }
+
+        [Fact]
+        public void EnsureInitWithDifferentOrderHostParams() 
+        {
+            string assemblyName = PlatformDetection.IsFullFramework ? "System.Configuration, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" : "System.Configuration.ConfigurationManager";
+
+            // InternalConfigFactory allows you to specify your own host / hostInitParams
+            // Ensure ImplictMachineConfigHost can init within this process and not throw an Invalid cast exception 
+            using (var temp = new TempConfig(TestData.EmptyConfig)) 
+            {
+                string typeName = "System.Configuration.Internal.InternalConfigConfigurationFactory, " + assemblyName;
+
+                Type type = Type.GetType(typeName, true);
+                var configFactory = (IInternalConfigConfigurationFactory) Activator.CreateInstance(type, true);
+                var config = configFactory.Create(typeof(TempConfigurationHost), "test", new ConfigurationFileMap(temp.ConfigPath), "test");
+
+                Assert.NotNull(config);
             }
         }
     }

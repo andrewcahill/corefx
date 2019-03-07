@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -9,7 +9,7 @@ using Xunit;
 
 namespace System.Tests
 {
-    public static partial class EnumTests
+    public partial class EnumTests
     {
         [Theory]
         [MemberData(nameof(Parse_TestData))]
@@ -34,7 +34,7 @@ namespace System.Tests
         [MemberData(nameof(Parse_Invalid_TestData))]
         public static void Parse_Invalid_NetCoreApp11(Type enumType, string value, bool ignoreCase, Type exceptionType)
         {
-            Type typeArgument = enumType == null || !enumType.GetTypeInfo().IsEnum ? typeof(SimpleEnum) : enumType;
+            Type typeArgument = enumType == null || !enumType.IsValueType ? typeof(SimpleEnum) : enumType;
             MethodInfo parseMethod = typeof(EnumTests).GetTypeInfo().GetMethod(nameof(Parse_Generic_Invalid_NetCoreApp11)).MakeGenericMethod(typeArgument);
             parseMethod.Invoke(null, new object[] { enumType, value, ignoreCase, exceptionType });
         }
@@ -74,17 +74,21 @@ namespace System.Tests
 
         public static IEnumerable<object[]> UnsupportedEnumType_TestData()
         {
+#if netcoreapp
             yield return new object[] { s_floatEnumType, 1.0f };
             yield return new object[] { s_doubleEnumType, 1.0 };
             yield return new object[] { s_intPtrEnumType, (IntPtr)1 };
             yield return new object[] { s_uintPtrEnumType, (UIntPtr)1 };
+#else
+            return Array.Empty<object[]>();
+#endif //netcoreapp
         }
 
         [Theory]
         [MemberData(nameof(UnsupportedEnumType_TestData))]
         public static void GetName_Unsupported_ThrowsArgumentException(Type enumType, object value)
         {
-            Assert.Throws<ArgumentException>("value", () => Enum.GetName(enumType, value));
+            AssertExtensions.Throws<ArgumentException>("value", () => Enum.GetName(enumType, value));
         }
 
         [Theory]
@@ -97,22 +101,16 @@ namespace System.Tests
             Assert.True(exName == nameof(InvalidOperationException) || exName == "ContractException");
         }
 
-        [Fact]
-        public static void ToString_InvalidUnicodeChars()
-        {
-            // TODO: move into ToString_Format_TestData when dotnet/buildtools#1091 is fixed
-            ToString_Format((Enum)Enum.ToObject(s_charEnumType, char.MaxValue), "D", char.MaxValue.ToString());
-            ToString_Format((Enum)Enum.ToObject(s_charEnumType, char.MaxValue), "X", "FFFF");
-            ToString_Format((Enum)Enum.ToObject(s_charEnumType, char.MaxValue), "F", char.MaxValue.ToString());
-            ToString_Format((Enum)Enum.ToObject(s_charEnumType, char.MaxValue), "G", char.MaxValue.ToString());
-        }
-
         public static IEnumerable<object[]> UnsupportedEnum_TestData()
         {
+#if netcoreapp
             yield return new object[] { Enum.ToObject(s_floatEnumType, 1) };
             yield return new object[] { Enum.ToObject(s_doubleEnumType, 2) };
             yield return new object[] { Enum.ToObject(s_intPtrEnumType, 1) };
             yield return new object[] { Enum.ToObject(s_uintPtrEnumType, 2) };
+#else
+            return Array.Empty<object[]>();
+#endif //netcoreapp
         }
 
         [Theory]
@@ -142,6 +140,8 @@ namespace System.Tests
             string formatFExceptionName = formatFException.GetType().Name;
             Assert.True(formatFExceptionName == nameof(InvalidOperationException) || formatFExceptionName == "ContractException");
         }
+
+#if netcoreapp // .NetNative does not support RefEmit nor any other way to create Enum types with unusual backing types.
         private static EnumBuilder GetNonRuntimeEnumTypeBuilder(Type underlyingType)
         {
             AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("Name"), AssemblyBuilderAccess.Run);
@@ -229,6 +229,6 @@ namespace System.Tests
 
             return enumBuilder.CreateTypeInfo().AsType();
         }
-        
+#endif //netcoreapp        
     }
 }

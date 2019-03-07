@@ -167,7 +167,7 @@ function mount_emulator {
 
 #Cross builds corefx
 function cross_build_corefx {
-    #Apply fixes for armel 
+    #Apply fixes for armel
     if [ "$__buildArch" == "armel" ]; then
         #Export the needed environment variables
         (set +x; echo 'Exporting LINUX_ARM_* environment variable')
@@ -175,9 +175,9 @@ function cross_build_corefx {
     fi
 
     #Cross building for emulator rootfs
-    ROOTFS_DIR="$__ARMRootfsMountPath" CPLUS_INCLUDE_PATH=$LINUX_ARM_INCPATH CXXFLAGS=$LINUX_ARM_CXXFLAGS ./build-native.sh -buildArch=$__buildArch -$__buildConfig -- cross $__verboseFlag
+    ROOTFS_DIR="$__ARMRootfsMountPath" CPLUS_INCLUDE_PATH=$LINUX_ARM_INCPATH CXXFLAGS=$LINUX_ARM_CXXFLAGS ./src/Native/build-native.sh $__buildArch $__buildConfig cross $__verboseFlag
 
-    ROOTFS_DIR="$__ARMRootfsMountPath" CPLUS_INCLUDE_PATH=$LINUX_ARM_INCPATH CXXFLAGS=$LINUX_ARM_CXXFLAGS ./build-managed.sh -$__buildConfig -skipTests -BuildPackages=false
+    ROOTFS_DIR="$__ARMRootfsMountPath" CPLUS_INCLUDE_PATH=$LINUX_ARM_INCPATH CXXFLAGS=$LINUX_ARM_CXXFLAGS ./build.sh -$__buildConfig /p:BuildNative=false /p:SkipTests=true /p:BuildPackages=false
 }
 
 # Cross builds corefx using Docker image
@@ -189,13 +189,13 @@ function cross_build_corefx_with_docker {
         # TODO: For arm, we are going to embed RootFS inside Docker image.
         case $__linuxCodeName in
         trusty)
-            __dockerImage=" microsoft/dotnet-buildtools-prereqs:ubuntu1404_cross_prereqs_v2"
+            __dockerImage=" microsoft/dotnet-buildtools-prereqs:ubuntu-14.04-cross-0cd4667-20172211042239"
             __skipRootFS=1
             __dockerEnvironmentVariables="-e ROOTFS_DIR=/crossrootfs/arm"
             __runtimeOS="ubuntu.14.04"
         ;;
         xenial)
-            __dockerImage=" microsoft/dotnet-buildtools-prereqs:ubuntu1604_cross_prereqs_v2"
+            __dockerImage=" microsoft/dotnet-buildtools-prereqs:ubuntu-16.04-cross-ef0ac75-20175511035548"
             __skipRootFS=1
             __dockerEnvironmentVariables="-e ROOTFS_DIR=/crossrootfs/arm"
             __runtimeOS="ubuntu.16.04"
@@ -208,8 +208,10 @@ function cross_build_corefx_with_docker {
         # For armel Tizen, we are going to construct RootFS on the fly.
         case $__linuxCodeName in
         tizen)
-            __dockerImage=" t2wish/dotnetcore:ubuntu1404_cross_prereqs_v2"
-            __runtimeOS="tizen.4.0.0"
+            __dockerImage=" tizendotnet/dotnet-buildtools-prereqs:ubuntu-16.04-cross-e435274-20180426002255-tizen-rootfs-5.0m1"
+            __skipRootFS=1
+            __dockerEnvironmentVariables+=" -e ROOTFS_DIR=/crossrootfs/armel.tizen.build"
+            __runtimeOS="tizen.5.0.0"
         ;;
         *)
             echo "ERROR: $__linuxCodeName is not a supported linux name for $__buildArch"
@@ -231,38 +233,14 @@ function cross_build_corefx_with_docker {
     fi
 
     # Cross building corefx with rootfs in Docker
-    __buildNativeCmd="/opt/corefx/build-native.sh -buildArch=$__buildArch -$__buildConfig -- cross $__verboseFlag"
-    if [ "$__buildArch" == "arm" ]; then
-        __buildManagedCmd="./build-managed.sh -$__buildConfig -buildArch=$__buildArch -RuntimeOS=$__runtimeOS"
-    else
-        # TODO-armel: We can use same option to arm, i.e. -buildArch and -RuntimeOS options for armel,
-        #              when CoreCLR packages are also available at NuGet server for armel.
-        __buildManagedCmd="./build-managed.sh -$__buildConfig -BuildPackages=false"
-
-    fi
-    $__dockerCmd $__buildNativeCmd
-    $__dockerCmd $__buildManagedCmd
-    sudo chown -R $(id -u -n) ./bin
-
     if [ "$__buildArch" == "armel" ]; then
-        # TODO-armel: This is a workaround. We don't need this if we can build managed for armel in above.
-        # Construct runtime directory
-        if [[ "$__buildConfig" == "release" ]]; then
-            __runtimePath="./bin/runtime/netcoreapp-Linux-Release-armel"
-            __managedPath="./bin/runtime/netcoreapp-Linux-Release-x64"
-        else
-            __runtimePath="./bin/runtime/netcoreapp-Linux-Debug-armel"
-            __managedPath="./bin/runtime/netcoreapp-Linux-Debug-x64"
-        fi
+        __extraCmd="/p:OverridePackageSource=https://tizen.myget.org/F/dotnet-core/api/v3/index.json"
+        __portableLinux="/p:PortableBuild=false"
+    fi
 
-        pushd $__managedPath
-        rm apphost corerun dotnet
-        rm *.so
-        rm *.ni.dll
-        popd
-        mv $__managedPath/* $__runtimePath/
-        rmdir $__managedPath
-    fi 
+    __buildCmd="./build.sh /p:ArchGroup=$__buildArch -$__buildConfig /p:RuntimeOS=$__runtimeOS $__portableLinux $__extraCmd"
+    $__dockerCmd $__buildCmd
+    sudo chown -R $(id -u -n) ./artifacts
 }
 
 #Define script variables

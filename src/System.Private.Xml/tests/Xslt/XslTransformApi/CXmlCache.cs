@@ -68,9 +68,6 @@ abstract public class CXmlBase
     //
     abstract public void Write(XmlWriter rXmlWriter);
 
-    abstract public string Xml
-    { get; }
-
     abstract public void WriteXml(TextWriter rTW);
 
     abstract public string Value
@@ -203,16 +200,6 @@ public class CXmlAttribute : CXmlBase
             }
 
             rXmlWriter.WriteEndAttribute();
-        }
-    }
-
-    override public string Xml
-    {
-        get
-        {
-            CXmlCache._rBufferWriter.Dispose();
-            WriteXml(CXmlCache._rBufferWriter);
-            return CXmlCache._rBufferWriter.ToString();
         }
     }
 
@@ -413,19 +400,9 @@ public class CXmlNode : CXmlBase
         }
     }
 
-    override public string Xml
-    {
-        get
-        {
-            CXmlCache._rBufferWriter.Dispose();
-            WriteXml(CXmlCache._rBufferWriter);
-            return CXmlCache._rBufferWriter.ToString();
-        }
-    }
-
     override public void WriteXml(TextWriter rTW)
     {
-        String strXml;
+        string strXml;
         CXmlAttribute rAttribute;
         CXmlBase rNode;
 
@@ -706,7 +683,6 @@ public class CXmlCache
     protected CXmlNode _rDocumentRootNode;
     protected CXmlNode _rRootNode = null;
     internal static NodeFlags _eDefaultFlags = NodeFlags.None;
-    internal static BufferWriter _rBufferWriter = new BufferWriter();
 
     private ITestOutputHelper _output;
     public CXmlCache(ITestOutputHelper output)
@@ -868,16 +844,6 @@ public class CXmlCache
             if (rXmlTextWriter != null)
                 rXmlTextWriter.Dispose();
             throw (e);
-        }
-    }
-
-    virtual public string Xml
-    {
-        get
-        {
-            _rBufferWriter.Dispose();
-            WriteXml(_rBufferWriter);
-            return _rBufferWriter.ToString();
         }
     }
 
@@ -1244,7 +1210,7 @@ public class CXmlCache
 public class ChecksumWriter : TextWriter
 {
     private int _nPosition = 0;
-    private Decimal _dResult = 0;
+    private decimal _dResult = 0;
     private Encoding _encoding;
 
     // --------------------------------------------------------------------------------------------------
@@ -1258,7 +1224,7 @@ public class ChecksumWriter : TextWriter
     // --------------------------------------------------------------------------------------------------
     //    Properties
     // --------------------------------------------------------------------------------------------------
-    public Decimal CheckSum
+    public decimal CheckSum
     {
         get { return _dResult; }
     }
@@ -1271,7 +1237,7 @@ public class ChecksumWriter : TextWriter
     // --------------------------------------------------------------------------------------------------
     //    Public methods
     // --------------------------------------------------------------------------------------------------
-    override public void Write(String str)
+    override public void Write(string str)
     {
         int i;
         int m;
@@ -1283,7 +1249,7 @@ public class ChecksumWriter : TextWriter
         }
     }
 
-    override public void Write(Char[] rgch)
+    override public void Write(char[] rgch)
     {
         int i;
         int m;
@@ -1295,7 +1261,7 @@ public class ChecksumWriter : TextWriter
         }
     }
 
-    override public void Write(Char[] rgch, Int32 iOffset, Int32 iCount)
+    override public void Write(char[] rgch, int iOffset, int iCount)
     {
         int i;
         int m;
@@ -1307,9 +1273,9 @@ public class ChecksumWriter : TextWriter
         }
     }
 
-    override public void Write(Char ch)
+    override public void Write(char ch)
     {
-        _dResult += Math.Round((Decimal)(ch / (_nPosition + 1.0)), 10);
+        _dResult += Math.Round((decimal)(ch / (_nPosition + 1.0)), 10);
         _nPosition++;
     }
 
@@ -1317,95 +1283,5 @@ public class ChecksumWriter : TextWriter
     {
         _nPosition = 0;
         _dResult = 0;
-    }
-}
-
-public class BufferWriter : TextWriter
-{
-    private int _nBufferSize = 0;
-    private int _nBufferUsed = 0;
-    private int _nBufferGrow = 1024;
-    private Char[] _rgchBuffer = null;
-    private Encoding _encoding;
-
-    // --------------------------------------------------------------------------------------------------
-    //    Constructor
-    // --------------------------------------------------------------------------------------------------
-    public BufferWriter()
-    {
-        _encoding = Encoding.UTF8;
-    }
-
-    // --------------------------------------------------------------------------------------------------
-    //    Properties
-    // --------------------------------------------------------------------------------------------------
-    override public string ToString()
-    {
-        return new String(_rgchBuffer, 0, _nBufferUsed);
-    }
-
-    public override Encoding Encoding
-    {
-        get { return _encoding; }
-    }
-
-    // --------------------------------------------------------------------------------------------------
-    //    Public methods
-    // --------------------------------------------------------------------------------------------------
-    override public void Write(String str)
-    {
-        int i;
-        int m;
-
-        m = str.Length;
-        for (i = 0; i < m; i++)
-        {
-            Write(str[i]);
-        }
-    }
-
-    override public void Write(Char[] rgch)
-    {
-        int i;
-        int m;
-
-        m = rgch.Length;
-        for (i = 0; i < m; i++)
-        {
-            Write(rgch[i]);
-        }
-    }
-
-    override public void Write(Char[] rgch, Int32 iOffset, Int32 iCount)
-    {
-        int i;
-        int m;
-
-        m = iOffset + iCount;
-        for (i = iOffset; i < m; i++)
-        {
-            Write(rgch[i]);
-        }
-    }
-
-    override public void Write(Char ch)
-    {
-        if (_nBufferUsed == _nBufferSize)
-        {
-            Char[] rgchTemp = new Char[_nBufferSize + _nBufferGrow];
-            for (_nBufferUsed = 0; _nBufferUsed < _nBufferSize; _nBufferUsed++)
-                rgchTemp[_nBufferUsed] = _rgchBuffer[_nBufferUsed];
-            _rgchBuffer = rgchTemp;
-            _nBufferSize += _nBufferGrow;
-            if (_nBufferGrow < (1024 * 1024))
-                _nBufferGrow *= 2;
-        }
-        _rgchBuffer[_nBufferUsed++] = ch;
-    }
-
-    override public void Close()
-    {
-        //Set nBufferUsed to 0, so we start writing from the beginning of the buffer.
-        _nBufferUsed = 0;
     }
 }

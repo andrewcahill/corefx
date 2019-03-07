@@ -20,9 +20,14 @@ namespace System.Xml.Tests
     public class CArgIntegrity : XsltApiTestCaseBase
     {
         private ITestOutputHelper _output;
+        private string _xslFile;
+        private string _xmlFile;
+
         public CArgIntegrity(ITestOutputHelper output) : base(output)
         {
             _output = output;
+            _xslFile = $"{GetTestFilePath()}.xsl";
+            _xmlFile = $"{GetTestFilePath()}.xml";
         }
 
         //[Variation(Desc = "Basic Verification Test", Pri = 0)]
@@ -51,7 +56,7 @@ namespace System.Xml.Tests
   </xsl:template>
 </xsl:stylesheet>";
 
-        private static void WriteFiles(string input, string output)
+        private void WriteFiles(string input, string output)
         {
             using (XmlWriter w = XmlWriter.Create(output))
             {
@@ -62,10 +67,10 @@ namespace System.Xml.Tests
             }
         }
 
-        private static void WriteXmlAndXslFiles()
+        private void WriteXmlAndXslFiles()
         {
-            WriteFiles(s_typeXml, "type.xml");
-            WriteFiles(s_typeXsl, "type.xsl");
+            WriteFiles(s_typeXml, _xmlFile);
+            WriteFiles(s_typeXsl, _xslFile);
         }
 
         //[Variation(Desc = "Tuple.XsltArgumentList.AddParam/AddExtensionObject", Param = 1)]
@@ -94,13 +99,13 @@ namespace System.Xml.Tests
 #pragma warning disable 0618
             XslTransform xslt = new XslTransform();
 #pragma warning restore 0618
-            xslt.Load("type.xsl");
+            xslt.Load(_xslFile);
 
             XsltArgumentList xslArg = new XsltArgumentList();
             xslArg.AddParam("param", "", t);
             xslArg.AddExtensionObject("", t);
 
-            XPathDocument xpathDom = new XPathDocument("type.xml");
+            XPathDocument xpathDom = new XPathDocument(_xmlFile);
             using (StringWriter sw = new StringWriter())
             {
                 xslt.Transform(xpathDom, xslArg, sw);
@@ -281,7 +286,7 @@ namespace System.Xml.Tests
         public void GetParam12()
         {
             m_xsltArg = new XsltArgumentList();
-            String obj = "0.00";
+            string obj = "0.00";
 
             // string
             m_xsltArg.AddParam("myArg1", szEmpty, obj);
@@ -309,7 +314,7 @@ namespace System.Xml.Tests
             if (i.GetType() != j.GetType())
                 Assert.True(false);
 
-            Boolean bF = (1 == 0);
+            bool bF = (1 == 0);
             m_xsltArg.AddParam("myArg3", szEmpty, bF);
             retObj = m_xsltArg.GetParam("myArg3", szEmpty);
             _output.WriteLine("Added Value:{0}\nRetrieved Value: {1}", bF.ToString(), retObj);
@@ -320,7 +325,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bT = (1 == 1);
+            bool bT = (1 == 1);
             m_xsltArg.AddParam("myArg4", szEmpty, bT);
             retObj = m_xsltArg.GetParam("myArg4", szEmpty);
             _output.WriteLine("Added Value:{0}\nRetrieved Value: {1}", bT.ToString(), retObj);
@@ -373,7 +378,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test" + str);
                 retObj = m_xsltArg.GetParam("myArg" + i, szEmpty);
@@ -385,7 +390,7 @@ namespace System.Xml.Tests
                 i++;
             }
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test"); // dont add whitespace to name here since addparam would throw
                 retObj = m_xsltArg.GetParam("myArg" + str, szEmpty);
@@ -1116,7 +1121,7 @@ namespace System.Xml.Tests
 		6.No Value Specified</result>";
 
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 0; i < 200; i++)
             {
@@ -1192,7 +1197,7 @@ namespace System.Xml.Tests
             int errCount = 0;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 try
                 {
@@ -1206,7 +1211,7 @@ namespace System.Xml.Tests
                 i++;
             }
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 try
                 {
@@ -1262,7 +1267,7 @@ namespace System.Xml.Tests
 		6.Test6</result>";
 
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 1; i < 7; i++)
             {
@@ -1306,7 +1311,7 @@ namespace System.Xml.Tests
 		6.No Value Specified</result>";
 
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 0; i < 300; i++)
             {
@@ -2171,7 +2176,6 @@ namespace System.Xml.Tests
     //[TestCase(Name = "XsltArgumentList - AddExtensionObject : Reader, Stream", Desc = "READER,STREAM")]
     //[TestCase(Name = "XsltArgumentList - AddExtensionObject : Reader, Writer", Desc = "READER,WRITER")]
     //[TestCase(Name = "XsltArgumentList - AddExtensionObject : Reader, TextWriter", Desc = "READER,TEXTWRITER")]
-    // TODO: Fix security issue
     ////[TestCase(Name="XsltArgumentList - AddExtensionObject : URI, Reader", Desc="URI,READER")]
     ////[TestCase(Name="XsltArgumentList - AddExtensionObject : URI, Stream", Desc="URI,STREAM")]
     ////[TestCase(Name="XsltArgumentList - AddExtensionObject : URI, Writer", Desc="URI,WRITER")]
@@ -2315,7 +2319,7 @@ namespace System.Xml.Tests
 		String  Argument: System.String</result>";
 
             m_xsltArg = new XsltArgumentList();
-            String obj = "0.00";
+            string obj = "0.00";
 
             // string
             m_xsltArg.AddExtensionObject("myArg1", obj);
@@ -2344,7 +2348,7 @@ namespace System.Xml.Tests
             if (i != (int)retObj)
                 Assert.True(false);
 
-            Boolean bF = (1 == 0);
+            bool bF = (1 == 0);
 
             m_xsltArg.AddExtensionObject("myArg3", bF);
             retObj = m_xsltArg.GetExtensionObject("myArg3");
@@ -2356,7 +2360,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bT = (1 == 1);
+            bool bT = (1 == 1);
 
             m_xsltArg.AddExtensionObject("myArg4", bT);
             retObj = m_xsltArg.GetExtensionObject("myArg4");
@@ -2573,7 +2577,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 MyObject obj = new MyObject(i, _output);
                 m_xsltArg.AddExtensionObject(szDefaultNS + str, obj);
@@ -2985,26 +2989,16 @@ namespace System.Xml.Tests
         [InlineData(InputType.Navigator, ReaderType.XmlValidatingReader, TransformType.Stream, DocType.XPathDocument)]
         [InlineData(InputType.Navigator, ReaderType.XmlValidatingReader, TransformType.TextWriter, DocType.XPathDocument)]
         [Theory]
-        public void AddExtObject25(InputType inputType, ReaderType readerType, TransformType transformType, DocType docType)
+        public void TC_ExtensionObj_Function_Mismatch_IncorrectCasing(InputType xslInputType, ReaderType readerType, TransformType outputType, DocType navType)
         {
             MyObject obj = new MyObject(25, _output);
             m_xsltArg = new XsltArgumentList();
 
             m_xsltArg.AddExtensionObject(szDefaultNS, obj);
-            if (LoadXSL("MyObject_CaseSensitive.xsl", inputType, readerType) == 1)
-            {
-                try
-                {
-                    Transform_ArgList("fruits.xml", transformType, docType);
-                    CheckResult(419.3031944636, transformType);
-                }
-                catch (System.Xml.Xsl.XsltException)
-                {
-                    return;
-                }
-            }
-            _output.WriteLine("Exception not thrown for wrong-case spelling of methods");
-            Assert.True(false);
+            LoadXSL("MyObject_CaseSensitive.xsl", xslInputType, readerType);
+            var e = Assert.Throws<XsltException>(() => Transform_ArgList("fruits.xml", outputType, navType));
+            var exceptionSourceAssembly = PlatformDetection.IsFullFramework ? "System.Data.SqlXml" : "System.Xml";
+            CheckExpectedError(e, exceptionSourceAssembly, "Xslt_UnknownXsltFunction", new[] { "FN3" });
         }
 
         //[Variation("Object namespace System.Xml.Tests found")]
@@ -3222,7 +3216,6 @@ namespace System.Xml.Tests
     /***********************************************************/
 
     //[TestCase(Name = "XsltArgumentList - RemoveParam : Reader , Reader", Desc = "READER,READER")]
-    // TODO: Fix security issue
     ////[TestCase(Name="XsltArgumentList - RemoveParam : URI, Stream", Desc="URI,STREAM")]
     //[TestCase(Name = "XsltArgumentList - RemoveParam : Navigator, Writer", Desc = "NAVIGATOR,WRITER")]
     //[TestCase(Name = "XsltArgumentList - RemoveParam : Navigator, TextWriter", Desc = "NAVIGATOR,TEXTWRITER")]
@@ -3598,7 +3591,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            String obj = "0.00";
+            string obj = "0.00";
 
             // string
             m_xsltArg.AddParam("myArg1", szEmpty, obj);
@@ -3622,7 +3615,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bF = (1 == 0);
+            bool bF = (1 == 0);
             m_xsltArg.AddParam("myArg4", szEmpty, bF);
             m_xsltArg.RemoveParam("myArg4", szEmpty);
             retObj = m_xsltArg.GetParam("myArg4", szEmpty);
@@ -3632,7 +3625,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bT = (1 == 1);
+            bool bT = (1 == 1);
             m_xsltArg.AddParam("myArg5", szEmpty, bT);
             m_xsltArg.RemoveParam("myArg5", szEmpty);
             retObj = m_xsltArg.GetParam("myArg5", szEmpty);
@@ -3642,7 +3635,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Int16)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (short)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3651,7 +3644,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (UInt16)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (ushort)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3660,7 +3653,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Int32)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (int)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3669,7 +3662,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (UInt32)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (uint)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3678,7 +3671,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Int64)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (long)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3687,7 +3680,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (UInt64)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (ulong)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3696,7 +3689,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Single)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (float)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3705,7 +3698,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Decimal)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (decimal)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3775,7 +3768,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test" + str);
                 m_xsltArg.RemoveParam("myArg" + i, szEmpty);
@@ -3789,7 +3782,7 @@ namespace System.Xml.Tests
             }
 
             i = 1;
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test"); // dont add whitespace to name here since addparam would throw
                 m_xsltArg.RemoveParam("myArg" + str, szEmpty);
@@ -3862,7 +3855,6 @@ namespace System.Xml.Tests
 
     //[TestCase(Name = "XsltArgumentList - RemoveExtensionObject : Reader, Stream", Desc = "READER,STREAM")]
     //[TestCase(Name = "XsltArgumentList - RemoveExtensionObject : Reader, TextWriter", Desc = "READER,TEXTWRITER")]
-    // TODO: Fix security issue
     ////[TestCase(Name="XsltArgumentList - RemoveExtensionObject : URI, Reader", Desc="URI,READER")]
     //[TestCase(Name = "XsltArgumentList - RemoveExtensionObject : Navigator, Stream", Desc = "NAVIGATOR,STREAM")]
     public class CArgRemoveExtObj : XsltApiTestCaseBase
@@ -4097,7 +4089,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 MyObject obj = new MyObject(i, _output);
 
@@ -4309,7 +4301,7 @@ namespace System.Xml.Tests
 		6.No Value Specified</result>";
 
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 0; i < 200; i++)
             {

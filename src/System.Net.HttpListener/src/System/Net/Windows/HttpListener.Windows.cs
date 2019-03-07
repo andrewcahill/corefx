@@ -21,17 +21,7 @@ namespace System.Net
 {
     public sealed unsafe partial class HttpListener
     {
-        public static bool IsSupported
-        {
-            get
-            {
-                return Interop.HttpApi.s_supported;
-            }
-        }
-
-        private static readonly Type s_channelBindingStatusType = typeof(Interop.HttpApi.HTTP_REQUEST_CHANNEL_BIND_STATUS);
-        private static readonly int s_requestChannelBindStatusSize =
-            Marshal.SizeOf(typeof(Interop.HttpApi.HTTP_REQUEST_CHANNEL_BIND_STATUS));
+        public static bool IsSupported => Interop.HttpApi.s_supported;
 
         // Windows 8 fixed a bug in Http.sys's HttpReceiveClientCertificate method.
         // Without this fix IOCP callbacks were not being called although ERROR_IO_PENDING was
@@ -64,13 +54,7 @@ namespace System.Net
         private bool _V2Initialized;
         private Dictionary<ulong, DisconnectAsyncResult> _disconnectResults;
 
-        internal SafeHandle RequestQueueHandle
-        {
-            get
-            {
-                return _requestQueueHandle;
-            }
-        }
+        internal SafeHandle RequestQueueHandle => _requestQueueHandle;
 
         private void ValidateV2Property()
         {
@@ -84,14 +68,9 @@ namespace System.Net
             }
         }
 
-
         public bool UnsafeConnectionNtlmAuthentication
         {
-            get
-            {
-                return _unsafeConnectionNtlmAuthentication;
-            }
-
+            get => _unsafeConnectionNtlmAuthentication;
             set
             {
                 CheckDisposed();
@@ -117,24 +96,8 @@ namespace System.Net
             }
         }
 
-        private Dictionary<ulong, DisconnectAsyncResult> DisconnectResults
-        {
-            get
-            {
-                if (_disconnectResults == null)
-                {
-                    lock (_internalLock)
-                    {
-                        if (_disconnectResults == null)
-                        {
-                            _disconnectResults = new Dictionary<ulong, DisconnectAsyncResult>();
-                        }
-                    }
-                }
-                return _disconnectResults;
-            }
-        }
-
+        private Dictionary<ulong, DisconnectAsyncResult> DisconnectResults =>
+            LazyInitializer.EnsureInitialized(ref _disconnectResults, () => new Dictionary<ulong, DisconnectAsyncResult>());
 
         private void SetUrlGroupProperty(Interop.HttpApi.HTTP_SERVER_PROPERTY property, IntPtr info, uint infosize)
         {
@@ -194,180 +157,6 @@ namespace System.Net
             }
         }
 
-        internal void AddPrefix(string uriPrefix)
-        {
-            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, $"uriPrefix:{uriPrefix}");
-            string registeredPrefix = null;
-            try
-            {
-                if (uriPrefix == null)
-                {
-                    throw new ArgumentNullException(nameof(uriPrefix));
-                }
-                CheckDisposed();
-                if (NetEventSource.IsEnabled) NetEventSource.Info(this, "uriPrefix:" + uriPrefix);
-                int i;
-                if (string.Compare(uriPrefix, 0, "http://", 0, 7, StringComparison.OrdinalIgnoreCase) == 0)
-                {
-                    i = 7;
-                }
-                else if (string.Compare(uriPrefix, 0, "https://", 0, 8, StringComparison.OrdinalIgnoreCase) == 0)
-                {
-                    i = 8;
-                }
-                else
-                {
-                    throw new ArgumentException(SR.net_listener_scheme, nameof(uriPrefix));
-                }
-                bool inSquareBrakets = false;
-                int j = i;
-                while (j < uriPrefix.Length && uriPrefix[j] != '/' && (uriPrefix[j] != ':' || inSquareBrakets))
-                {
-                    if (uriPrefix[j] == '[')
-                    {
-                        if (inSquareBrakets)
-                        {
-                            j = i;
-                            break;
-                        }
-                        inSquareBrakets = true;
-                    }
-                    if (inSquareBrakets && uriPrefix[j] == ']')
-                    {
-                        inSquareBrakets = false;
-                    }
-                    j++;
-                }
-                if (i == j)
-                {
-                    throw new ArgumentException(SR.net_listener_host, nameof(uriPrefix));
-                }
-                if (uriPrefix[uriPrefix.Length - 1] != '/')
-                {
-                    throw new ArgumentException(SR.net_listener_slash, nameof(uriPrefix));
-                }
-                registeredPrefix = uriPrefix[j] == ':' ? String.Copy(uriPrefix) : uriPrefix.Substring(0, j) + (i == 7 ? ":80" : ":443") + uriPrefix.Substring(j);
-                fixed (char* pChar = registeredPrefix)
-                {
-                    i = 0;
-                    while (pChar[i] != ':')
-                    {
-                        pChar[i] = (char)CaseInsensitiveAscii.AsciiToLower[(byte)pChar[i]];
-                        i++;
-                    }
-                }
-                if (NetEventSource.IsEnabled) NetEventSource.Info(this, "mapped uriPrefix:" + uriPrefix + " to registeredPrefix:" + registeredPrefix);
-                if (_state == State.Started)
-                {
-                    if (NetEventSource.IsEnabled) NetEventSource.Info(this, "Calling Interop.HttpApi.HttpAddUrl[ToUrlGroup]");
-                    uint statusCode = InternalAddPrefix(registeredPrefix);
-                    if (statusCode != Interop.HttpApi.ERROR_SUCCESS)
-                    {
-                        if (statusCode == Interop.HttpApi.ERROR_ALREADY_EXISTS)
-                            throw new HttpListenerException((int)statusCode, SR.Format(SR.net_listener_already, registeredPrefix));
-                        else
-                            throw new HttpListenerException((int)statusCode);
-                    }
-                }
-                _uriPrefixes[uriPrefix] = registeredPrefix;
-                _defaultServiceNames.Add(uriPrefix);
-            }
-            catch (Exception exception)
-            {
-                if (NetEventSource.IsEnabled) NetEventSource.Error(this, $"AddPrefix {exception}");
-                throw;
-            }
-            finally
-            {
-                if (NetEventSource.IsEnabled) NetEventSource.Exit(this, $"prefix: {registeredPrefix}");
-            }
-        }
-
-        internal bool ContainsPrefix(string uriPrefix) => _uriPrefixes.Contains(uriPrefix);
-
-        public HttpListenerPrefixCollection Prefixes
-        {
-            get
-            {
-                if (NetEventSource.IsEnabled) NetEventSource.Enter(this);
-                CheckDisposed();
-                if (_prefixes == null)
-                {
-                    _prefixes = new HttpListenerPrefixCollection(this);
-                }
-                if (NetEventSource.IsEnabled) NetEventSource.Enter(this);
-                return _prefixes;
-            }
-        }
-
-        internal bool RemovePrefix(string uriPrefix)
-        {
-            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, $"uriPrefix: {uriPrefix}");
-            try
-            {
-                CheckDisposed();
-                if (NetEventSource.IsEnabled) NetEventSource.Info(this, $"uriPrefix: {uriPrefix}");
-                if (uriPrefix == null)
-                {
-                    throw new ArgumentNullException(nameof(uriPrefix));
-                }
-
-                if (!_uriPrefixes.Contains(uriPrefix))
-                {
-                    return false;
-                }
-
-                if (_state == State.Started)
-                {
-                    InternalRemovePrefix((string)_uriPrefixes[uriPrefix]);
-                }
-
-                _uriPrefixes.Remove(uriPrefix);
-                _defaultServiceNames.Remove(uriPrefix);
-            }
-            catch (Exception exception)
-            {
-                if (NetEventSource.IsEnabled) NetEventSource.Error(this, $"RemovePrefix {exception}");
-                throw;
-            }
-            finally
-            {
-                if (NetEventSource.IsEnabled) NetEventSource.Exit(this, $"uriPrefix: {uriPrefix}");
-            }
-            return true;
-        }
-
-        internal void RemoveAll(bool clear)
-        {
-            if (NetEventSource.IsEnabled) NetEventSource.Enter(this);
-            try
-            {
-                CheckDisposed();
-                // go through the uri list and unregister for each one of them
-                if (_uriPrefixes.Count > 0)
-                {
-                    if (_state == State.Started)
-                    {
-                        foreach (string registeredPrefix in _uriPrefixes.Values)
-                        {
-                            // ignore possible failures
-                            InternalRemovePrefix(registeredPrefix);
-                        }
-                    }
-
-                    if (clear)
-                    {
-                        _uriPrefixes.Clear();
-                        _defaultServiceNames.Clear();
-                    }
-                }
-            }
-            finally
-            {
-                if (NetEventSource.IsEnabled) NetEventSource.Exit(this);
-            }
-        }
-
         private IntPtr DangerousGetHandle()
         {
             return ((HttpRequestQueueV2Handle)_requestQueueHandle).DangerousGetHandle();
@@ -384,9 +173,11 @@ namespace System.Net
                         if (_requestQueueBoundHandle == null)
                         {
                             _requestQueueBoundHandle = ThreadPoolBoundHandle.BindHandle(_requestQueueHandle);
+                            if (NetEventSource.IsEnabled) NetEventSource.Info($"ThreadPoolBoundHandle.BindHandle({_requestQueueHandle}) -> {_requestQueueBoundHandle}");
                         }
                     }
                 }
+
                 return _requestQueueBoundHandle;
             }
         }
@@ -643,10 +434,10 @@ namespace System.Net
 
             // Disabling callbacks when IO operation completes synchronously (returns ErrorCodes.ERROR_SUCCESS)
             if (SkipIOCPCallbackOnSuccess &&
-                !Interop.HttpApi.SetFileCompletionNotificationModes(
+                !Interop.Kernel32.SetFileCompletionNotificationModes(
                     requestQueueHandle,
-                    Interop.HttpApi.FileCompletionNotificationModes.SkipCompletionPortOnSuccess |
-                    Interop.HttpApi.FileCompletionNotificationModes.SkipSetEventOnHandle))
+                    Interop.Kernel32.FileCompletionNotificationModes.SkipCompletionPortOnSuccess |
+                    Interop.Kernel32.FileCompletionNotificationModes.SkipSetEventOnHandle))
             {
                 throw new HttpListenerException(Marshal.GetLastWin32Error());
             }
@@ -658,6 +449,7 @@ namespace System.Net
         {
             if ((_requestQueueHandle != null) && (!_requestQueueHandle.IsInvalid))
             {
+                if (NetEventSource.IsEnabled) NetEventSource.Info($"Dispose ThreadPoolBoundHandle: {_requestQueueBoundHandle}");
                 _requestQueueBoundHandle?.Dispose();
                 _requestQueueHandle.Dispose();
             }
@@ -727,24 +519,9 @@ namespace System.Net
             }
         }
 
-        private uint InternalAddPrefix(string uriPrefix)
+        private void RemovePrefixCore(string uriPrefix)
         {
-            uint statusCode = 0;
-
-            statusCode =
-                Interop.HttpApi.HttpAddUrlToUrlGroup(
-                    _urlGroupId,
-                    uriPrefix,
-                    0,
-                    0);
-
-            return statusCode;
-        }
-
-        private bool InternalRemovePrefix(string uriPrefix)
-        {
-            uint statusCode = Interop.HttpApi.HttpRemoveUrlFromUrlGroup(_urlGroupId, uriPrefix, 0);
-            return statusCode != Interop.HttpApi.ERROR_NOT_FOUND;
+            Interop.HttpApi.HttpRemoveUrlFromUrlGroup(_urlGroupId, uriPrefix, 0);
         }
 
         private void AddAllPrefixes()
@@ -754,15 +531,26 @@ namespace System.Net
             {
                 foreach (string registeredPrefix in _uriPrefixes.Values)
                 {
-                    uint statusCode = InternalAddPrefix(registeredPrefix);
-                    if (statusCode != Interop.HttpApi.ERROR_SUCCESS)
-                    {
-                        if (statusCode == Interop.HttpApi.ERROR_ALREADY_EXISTS)
-                            throw new HttpListenerException((int)statusCode, SR.Format(SR.net_listener_already, registeredPrefix));
-                        else
-                            throw new HttpListenerException((int)statusCode);
-                    }
+                    AddPrefixCore(registeredPrefix);
                 }
+            }
+        }
+
+        private void AddPrefixCore(string registeredPrefix)
+        {
+            if (NetEventSource.IsEnabled) NetEventSource.Info(this, "Calling Interop.HttpApi.HttpAddUrl[ToUrlGroup]");
+
+            uint statusCode = Interop.HttpApi.HttpAddUrlToUrlGroup(
+                                  _urlGroupId,
+                                  registeredPrefix,
+                                  0,
+                                  0);
+            if (statusCode != Interop.HttpApi.ERROR_SUCCESS)
+            {
+                if (statusCode == Interop.HttpApi.ERROR_ALREADY_EXISTS)
+                    throw new HttpListenerException((int)statusCode, SR.Format(SR.net_listener_already, registeredPrefix));
+                else
+                    throw new HttpListenerException((int)statusCode);
             }
         }
 
@@ -950,7 +738,7 @@ namespace System.Net
                 if (httpContext == null)
                 {
                     Debug.Assert(castedAsyncResult.Result is Exception, "EndGetContext|The result is neither a HttpListenerContext nor an Exception.");
-                    ExceptionDispatchInfo.Capture(castedAsyncResult.Result as Exception).Throw();
+                    ExceptionDispatchInfo.Throw(castedAsyncResult.Result as Exception);
                 }
             }
             catch (Exception exception)
@@ -1059,7 +847,7 @@ namespace System.Net
                             NetEventSource.Info(this, $"authenticationScheme: {authenticationScheme}");
                         }
                         SendError(requestId, HttpStatusCode.InternalServerError, null);
-                        httpContext.Close();
+                        FreeContext(ref httpContext, memoryBlob);
                         return null;
                     }
                 }
@@ -1143,9 +931,7 @@ namespace System.Net
                     }
 
                     httpError = HttpStatusCode.Unauthorized;
-                    httpContext.Request.DetachBlob(memoryBlob);
-                    httpContext.Close();
-                    httpContext = null;
+                    FreeContext(ref httpContext, memoryBlob);
                 }
                 else
                 {
@@ -1218,7 +1004,10 @@ namespace System.Net
 
                             if (decodedOutgoingBlob != null)
                             {
-                                outBlob = Convert.ToBase64String(decodedOutgoingBlob);
+                                // Prefix SPNEGO token/NTLM challenge with scheme per RFC 4559, MS-NTHT
+                                outBlob = string.Format("{0} {1}",
+                                    headerScheme == AuthenticationSchemes.Ntlm ? NegotiationInfoClass.NTLM : NegotiationInfoClass.Negotiate,
+                                    Convert.ToBase64String(decodedOutgoingBlob));
                             }
 
                             if (!error)
@@ -1309,12 +1098,9 @@ namespace System.Net
                                 {
                                     // auth incomplete
                                     newContext = context;
-
-                                    challenge = (headerScheme == AuthenticationSchemes.Ntlm ? NegotiationInfoClass.NTLM : NegotiationInfoClass.Negotiate);
-                                    if (!String.IsNullOrEmpty(outBlob))
-                                    {
-                                        challenge += " " + outBlob;
-                                    }
+                                    challenge = string.IsNullOrEmpty(outBlob)
+                                        ? headerScheme == AuthenticationSchemes.Ntlm ? NegotiationInfoClass.NTLM : NegotiationInfoClass.Negotiate
+                                        : outBlob;
                                 }
                             }
                             break;
@@ -1369,9 +1155,7 @@ namespace System.Net
                             NetEventSource.Info(this, "Handshake has failed.");
                         }
 
-                        httpContext.Request.DetachBlob(memoryBlob);
-                        httpContext.Close();
-                        httpContext = null;
+                        FreeContext(ref httpContext, memoryBlob);
                     }
                 }
 
@@ -1448,8 +1232,7 @@ namespace System.Net
 
                         if (NetEventSource.IsEnabled) NetEventSource.Info(this, "connectionId:" + connectionId + " because of failed HttpWaitForDisconnect");
                         SendError(requestId, HttpStatusCode.InternalServerError, null);
-                        httpContext.Request.DetachBlob(memoryBlob);
-                        httpContext.Close();
+                        FreeContext(ref httpContext, memoryBlob);
                         return null;
                     }
                 }
@@ -1490,11 +1273,7 @@ namespace System.Net
             }
             catch
             {
-                if (httpContext != null)
-                {
-                    httpContext.Request.DetachBlob(memoryBlob);
-                    httpContext.Close();
-                }
+                FreeContext(ref httpContext, memoryBlob);
                 if (newContext != null)
                 {
                     if (newContext == context)
@@ -1547,6 +1326,16 @@ namespace System.Net
                         disconnectResult.FinishOwningDisconnectHandling();
                     }
                 }
+            }
+        }
+        
+        private static void FreeContext(ref HttpListenerContext httpContext, RequestContextBase memoryBlob)
+        {
+            if (httpContext != null)
+            {
+                httpContext.Request.DetachBlob(memoryBlob);
+                httpContext.Close();
+                httpContext = null;
             }
         }
 
@@ -1639,7 +1428,7 @@ namespace System.Net
             string clientSpn = context.ClientSpecifiedSpn;
 
             // An empty SPN is only allowed in the WhenSupported case
-            if (String.IsNullOrEmpty(clientSpn))
+            if (string.IsNullOrEmpty(clientSpn))
             {
                 if (policy.PolicyEnforcement == PolicyEnforcement.WhenSupported)
                 {
@@ -1839,7 +1628,7 @@ namespace System.Net
 
             if ((authenticationScheme & AuthenticationSchemes.Basic) != 0)
             {
-                AddChallenge(ref challenges, "Basic realm =\"" + Realm + "\"");
+                AddChallenge(ref challenges, "Basic realm=\"" + Realm + "\"");
             }
 
             return challenges;
@@ -1987,16 +1776,16 @@ namespace System.Net
         private static unsafe int GetTokenOffsetFromBlob(IntPtr blob)
         {
             Debug.Assert(blob != IntPtr.Zero);
-            IntPtr tokenPointer = Marshal.ReadIntPtr((IntPtr)blob, (int)Marshal.OffsetOf(s_channelBindingStatusType, "ChannelToken"));
+            IntPtr tokenPointer = ((Interop.HttpApi.HTTP_REQUEST_CHANNEL_BIND_STATUS*)blob)->ChannelToken;
 
             Debug.Assert(tokenPointer != IntPtr.Zero);
-            return (int)((long)tokenPointer - (long)blob);
+            return (int)((byte*)tokenPointer - (byte*)blob);
         }
 
         private static unsafe int GetTokenSizeFromBlob(IntPtr blob)
         {
             Debug.Assert(blob != IntPtr.Zero);
-            return Marshal.ReadInt32(blob, (int)Marshal.OffsetOf(s_channelBindingStatusType, "ChannelTokenSize"));
+            return (int)((Interop.HttpApi.HTTP_REQUEST_CHANNEL_BIND_STATUS*)blob)->ChannelTokenSize;
         }
 
         internal ChannelBinding GetChannelBindingFromTls(ulong connectionId)
@@ -2005,7 +1794,7 @@ namespace System.Net
 
             // +128 since a CBT is usually <128 thus we need to call HRCC just once. If the CBT
             // is >128 we will get ERROR_MORE_DATA and call again
-            int size = s_requestChannelBindStatusSize + 128;
+            int size = sizeof(Interop.HttpApi.HTTP_REQUEST_CHANNEL_BIND_STATUS) + 128;
 
             Debug.Assert(size > 0);
 
@@ -2035,7 +1824,7 @@ namespace System.Net
                     {
                         int tokenOffset = GetTokenOffsetFromBlob((IntPtr)blobPtr);
                         int tokenSize = GetTokenSizeFromBlob((IntPtr)blobPtr);
-                        Debug.Assert(tokenSize < Int32.MaxValue);
+                        Debug.Assert(tokenSize < int.MaxValue);
 
                         token = Interop.HttpApi.SafeLocalFreeChannelBinding.LocalAlloc(tokenSize);
                         if (token.IsInvalid)
@@ -2047,9 +1836,9 @@ namespace System.Net
                     else if (statusCode == Interop.HttpApi.ERROR_MORE_DATA)
                     {
                         int tokenSize = GetTokenSizeFromBlob((IntPtr)blobPtr);
-                        Debug.Assert(tokenSize < Int32.MaxValue);
+                        Debug.Assert(tokenSize < int.MaxValue);
 
-                        size = s_requestChannelBindStatusSize + tokenSize;
+                        size = sizeof(Interop.HttpApi.HTTP_REQUEST_CHANNEL_BIND_STATUS) + tokenSize;
                     }
                     else if (statusCode == Interop.HttpApi.ERROR_INVALID_PARAMETER)
                     {
@@ -2125,8 +1914,10 @@ namespace System.Net
                 _ownershipState = 1;
                 _httpListener = httpListener;
                 _connectionId = connectionId;
+
                 // we can call the Unsafe API here, we won't ever call user code
-                _nativeOverlapped = httpListener._requestQueueBoundHandle.AllocateNativeOverlapped(s_IOCallback, state: this, pinData: null);
+                _nativeOverlapped = httpListener.RequestQueueBoundHandle.AllocateNativeOverlapped(s_IOCallback, state: this, pinData: null);
+                if (NetEventSource.IsEnabled) NetEventSource.Info($"DisconnectAsyncResult: ThreadPoolBoundHandle.AllocateNativeOverlapped({httpListener._requestQueueBoundHandle}) -> {_nativeOverlapped->GetHashCode()}");
             }
 
             internal bool StartOwningDisconnectHandling()
@@ -2161,6 +1952,7 @@ namespace System.Net
             private static unsafe void IOCompleted(DisconnectAsyncResult asyncResult, uint errorCode, uint numBytes, NativeOverlapped* nativeOverlapped)
             {
                 if (NetEventSource.IsEnabled) NetEventSource.Info(null, "_connectionId:" + asyncResult._connectionId);
+
                 asyncResult._httpListener._requestQueueBoundHandle.FreeNativeOverlapped(nativeOverlapped);
                 if (Interlocked.Exchange(ref asyncResult._ownershipState, 2) == 0)
                 {

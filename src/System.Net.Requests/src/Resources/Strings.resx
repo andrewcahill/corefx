@@ -1,5 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<root>
+﻿<root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
     <xsd:element name="root" msdata:IsDataSet="true">
@@ -88,6 +87,9 @@
   <data name="net_MethodNotImplementedException" xml:space="preserve">
     <value>This method is not implemented by this class.</value>
   </data>
+  <data name="net_OperationNotSupportedException" xml:space="preserve">
+    <value>This operation is not supported.</value>
+  </data>
   <data name="net_PropertyNotImplementedException" xml:space="preserve">
     <value>This property is not implemented by this class.</value>
   </data>
@@ -119,7 +121,7 @@
     <value>Keep-Alive and Close may not be set using this property.</value>
   </data>
   <data name="net_fromto" xml:space="preserve">
-    <value>The From parameter cannot be less than To.</value>
+    <value>The From parameter cannot be greater than To.</value>
   </data>
   <data name="net_needchunked" xml:space="preserve">
     <value>TransferEncoding requires the SendChunked property to be set to true.</value>
@@ -145,7 +147,7 @@
   <data name="net_wrongversion" xml:space="preserve">
     <value>Only HTTP/1.0 and HTTP/1.1 version requests are currently supported.</value>
   </data>
-   <data name="net_WebHeaderInvalidControlChars" xml:space="preserve">
+  <data name="net_WebHeaderInvalidControlChars" xml:space="preserve">
     <value>Specified value has invalid Control characters.</value>
   </data>
   <data name="net_WebHeaderInvalidCRLFChars" xml:space="preserve">
@@ -261,5 +263,8 @@
   </data>
   <data name="net_ftpstatuscode_ActionNotTakenFilenameNotAllowed" xml:space="preserve">
     <value>File name not allowed</value>
+  </data>
+  <data name="net_invalid_host" xml:space="preserve">
+    <value>The specified value is not a valid Host header string.</value>
   </data>
 </root>

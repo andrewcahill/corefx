@@ -12,9 +12,6 @@ using System.Text.RegularExpressions;
 
 namespace System.DirectoryServices.AccountManagement
 {
-#pragma warning disable 618    // Have not migrated to v4 transparency yet
-    [System.Security.SecurityCritical(System.Security.SecurityCriticalScope.Everything)]
-#pragma warning restore 618
     internal class SAMQuerySet : ResultSet
     {
         // We will iterate over all principals under ctxBase, returning only those which are in the list of types and which
@@ -206,9 +203,6 @@ namespace System.DirectoryServices.AccountManagement
     // The matcher routines for query-by-example support
     //
 
-#pragma warning disable 618    // Have not migrated to v4 transparency yet
-    [System.Security.SecurityCritical(System.Security.SecurityCriticalScope.Everything)]
-#pragma warning restore 618
     internal class QbeMatcher : SAMMatcher
     {
         private QbeFilterDescription _propertiesToMatch;
@@ -270,9 +264,8 @@ namespace System.DirectoryServices.AccountManagement
                 {
                     // Must be a property we don't support
                     throw new NotSupportedException(
-                                String.Format(
-                                        CultureInfo.CurrentCulture,
-                                        StringResources.StoreCtxUnsupportedPropertyForQuery,
+                                SR.Format(
+                                        SR.StoreCtxUnsupportedPropertyForQuery,
                                         PropertyNamesExternal.GetExternalForm(filter.PropertyName)));
                 }
 
@@ -378,7 +371,7 @@ namespace System.DirectoryServices.AccountManagement
                         if (values.Count != 0)
                         {
                             Debug.Assert(values.Count == 1);
-                            Debug.Assert(values[0] is Int32);
+                            Debug.Assert(values[0] is int);
 
                             int secondsLapsed = (int)values[0];
 
@@ -513,7 +506,7 @@ namespace System.DirectoryServices.AccountManagement
             int index = samToMatch.IndexOf('\\');
 
             if (index == samToMatch.Length - 1)
-                throw new InvalidOperationException(StringResources.StoreCtxNT4IdentityClaimWrongForm);
+                throw new InvalidOperationException(SR.StoreCtxNT4IdentityClaimWrongForm);
 
             string samAccountName = (index != -1) ? samToMatch.Substring(index + 1) :    // +1 to skip the '/'
                                                      samToMatch;
@@ -537,7 +530,7 @@ namespace System.DirectoryServices.AccountManagement
             byte[] sidToMatch = Utils.StringToByteArray((string)filter.Value);
 
             if (sidToMatch == null)
-                throw new InvalidOperationException(StringResources.StoreCtxSecurityIdentityClaimBadFormat);
+                throw new InvalidOperationException(SR.StoreCtxSecurityIdentityClaimBadFormat);
 
             if (de.Properties["objectSid"].Count > 0 && de.Properties["objectSid"].Value != null)
             {
@@ -702,9 +695,6 @@ namespace System.DirectoryServices.AccountManagement
     // The matcher routines for FindBy* support
     //
 
-#pragma warning disable 618    // Have not migrated to v4 transparency yet
-    [System.Security.SecurityCritical(System.Security.SecurityCriticalScope.Everything)]
-#pragma warning restore 618
     internal class FindByDateMatcher : SAMMatcher
     {
         internal enum DateProperty
@@ -794,7 +784,7 @@ namespace System.DirectoryServices.AccountManagement
             if (values.Count != 0)
             {
                 Debug.Assert(values.Count == 1);
-                Debug.Assert(values[0] is Int32);
+                Debug.Assert(values[0] is int);
 
                 int secondsLapsed = (int)values[0];
 
@@ -843,9 +833,6 @@ namespace System.DirectoryServices.AccountManagement
         }
     }
 
-#pragma warning disable 618    // Have not migrated to v4 transparency yet
-    [System.Security.SecurityCritical(System.Security.SecurityCriticalScope.Everything)]
-#pragma warning restore 618
     internal class GroupMemberMatcher : SAMMatcher
     {
         private byte[] _memberSidToMatch;

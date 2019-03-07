@@ -2,12 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Globalization;
-    using System.Collections;
-
     public class GlobalCatalogCollection : ReadOnlyCollectionBase
     {
         internal GlobalCatalogCollection() { }
@@ -20,18 +18,12 @@ namespace System.DirectoryServices.ActiveDirectory
             }
         }
 
-        public GlobalCatalog this[int index]
-        {
-            get
-            {
-                return (GlobalCatalog)InnerList[index];
-            }
-        }
+        public GlobalCatalog this[int index] => (GlobalCatalog)InnerList[index];
 
         public bool Contains(GlobalCatalog globalCatalog)
         {
             if (globalCatalog == null)
-                throw new ArgumentNullException("globalCatalog");
+                throw new ArgumentNullException(nameof(globalCatalog));
 
             for (int i = 0; i < InnerList.Count; i++)
             {
@@ -47,7 +39,7 @@ namespace System.DirectoryServices.ActiveDirectory
         public int IndexOf(GlobalCatalog globalCatalog)
         {
             if (globalCatalog == null)
-                throw new ArgumentNullException("globalCatalog");
+                throw new ArgumentNullException(nameof(globalCatalog));
 
             for (int i = 0; i < InnerList.Count; i++)
             {

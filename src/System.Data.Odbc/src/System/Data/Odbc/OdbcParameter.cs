@@ -2,24 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.ComponentModel;
-using System.Data;
 using System.Data.Common;
-using System.Data.ProviderBase;
 using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
 
 namespace System.Data.Odbc
 {
-    [
-    TypeConverterAttribute(typeof(System.Data.Odbc.OdbcParameter.OdbcParameterConverter))
-    ]
-    public sealed partial class OdbcParameter : DbParameter, ICloneable, IDbDataParameter
+    public sealed partial class OdbcParameter : DbParameter, ICloneable, IDataParameter, IDbDataParameter
     {
         private bool _hasChanged;
         private bool _userSpecifiedType;
@@ -113,9 +106,9 @@ namespace System.Data.Odbc
                              OdbcType odbcType,
                              int size,
                              ParameterDirection parameterDirection,
-                             Boolean isNullable,
-                             Byte precision,
-                             Byte scale,
+                             bool isNullable,
+                             byte precision,
+                             byte scale,
                              string srcColumn,
                              DataRowVersion srcVersion,
                              object value
@@ -137,7 +130,7 @@ namespace System.Data.Odbc
         public OdbcParameter(string parameterName,
                                  OdbcType odbcType, int size,
                                  ParameterDirection parameterDirection,
-                                 Byte precision, Byte scale,
+                                 byte precision, byte scale,
                                  string sourceColumn, DataRowVersion sourceVersion, bool sourceColumnNullMapping,
                                  object value) : this()
         { // V2.0 everything - round trip all browsable properties + precision/scale
@@ -153,7 +146,7 @@ namespace System.Data.Odbc
             this.Value = value;
         }
 
-        override public System.Data.DbType DbType
+        public override System.Data.DbType DbType
         {
             get
             {
@@ -181,9 +174,6 @@ namespace System.Data.Odbc
 
         [
         DefaultValue(OdbcType.NChar),
-        RefreshProperties(RefreshProperties.All),
-        ResCategoryAttribute(Res.DataCategory_Data),
-        ResDescriptionAttribute(Res.OdbcParameter_OdbcType),
         System.Data.Common.DbProviderSpecificTypePropertyAttribute(true),
         ]
         public OdbcType OdbcType
@@ -230,11 +220,7 @@ namespace System.Data.Odbc
             }
         }
 
-        [
-        ResCategoryAttribute(Res.DataCategory_Data),
-        ResDescriptionAttribute(Res.DbParameter_ParameterName),
-        ]
-        override public string ParameterName
+        public override string ParameterName
         { // V1.2.3300, XXXParameter V1.0.3300
             get
             {
@@ -251,10 +237,7 @@ namespace System.Data.Odbc
             }
         }
 
-        [DefaultValue((Byte)0)] // MDAC 65862
-        [ResCategoryAttribute(Res.DataCategory_Data)]
-        [ResDescriptionAttribute(Res.DbDataParameter_Precision)]
-        public new Byte Precision
+        public new byte Precision
         {
             get
             {
@@ -290,10 +273,7 @@ namespace System.Data.Odbc
             return (0 != _precision);
         }
 
-        [DefaultValue((Byte)0)] // MDAC 65862
-        [ResCategoryAttribute(Res.DataCategory_Data)]
-        [ResDescriptionAttribute(Res.DbDataParameter_Scale)]
-        public new Byte Scale
+        public new byte Scale
         {
             get
             {
@@ -362,7 +342,7 @@ namespace System.Data.Odbc
                         {
                             cch = 0;
                         }
-                        else if (value is String)
+                        else if (value is string)
                         {
                             cch = ((String)value).Length - offset;
 
@@ -416,7 +396,7 @@ namespace System.Data.Odbc
                             }
                         }
 #if DEBUG
-                        else { Debug.Assert(false, "not expecting this"); }
+                        else { Debug.Fail("not expecting this"); }
 #endif
                         // Note: ColumnSize should never be 0,
                         // this represents the size of the column on the backend.
@@ -427,7 +407,7 @@ namespace System.Data.Odbc
                     }
                 }
             }
-            Debug.Assert((0 <= cch) && (cch < 0x3fffffff), String.Format((IFormatProvider)null, "GetColumnSize: cch = {0} out of range, _internalShouldSerializeSize = {1}, _internalSize = {2}", cch, _internalShouldSerializeSize, _internalSize));
+            Debug.Assert((0 <= cch) && (cch < 0x3fffffff), $"GetColumnSize: cch = {cch} out of range, _internalShouldSerializeSize = {_internalShouldSerializeSize}, _internalSize = {_internalSize}");
             return cch;
         }
 
@@ -445,7 +425,7 @@ namespace System.Data.Odbc
             if (0 >= cch)
             {
                 bool twobytesperunit = false;
-                if (value is String)
+                if (value is string)
                 {
                     cch = ((string)value).Length - offset;
                     twobytesperunit = true;
@@ -472,7 +452,7 @@ namespace System.Data.Odbc
                     cch *= 2;
                 }
             }
-            Debug.Assert((0 <= cch) && (cch < 0x3fffffff), String.Format((IFormatProvider)null, "GetValueSize: cch = {0} out of range, _internalShouldSerializeSize = {1}, _internalSize = {2}", cch, _internalShouldSerializeSize, _internalSize));
+            Debug.Assert((0 <= cch) && (cch < 0x3fffffff), $"GetValueSize: cch = {cch} out of range, _internalShouldSerializeSize = {_internalShouldSerializeSize}, _internalSize = {_internalSize}");
             return cch;
         }
 
@@ -508,7 +488,7 @@ namespace System.Data.Odbc
                                 ccb = 0;
                             }
                         }
-                        else if (value is String)
+                        else if (value is string)
                         {
                             ccb = (((String)value).Length - offset) * 2 + 2;
                         }
@@ -521,7 +501,7 @@ namespace System.Data.Odbc
                             ccb = ((byte[])value).Length - offset;
                         }
 #if DEBUG
-                        else { Debug.Assert(false, "not expecting this"); }
+                        else { Debug.Fail("not expecting this"); }
 #endif
                         if ((0 != (ParameterDirection.Output & _internalDirection)) && (0x3fffffff <= _internalSize))
                         {
@@ -532,7 +512,7 @@ namespace System.Data.Odbc
                     }
                     else if (ODBC32.SQL_C.WCHAR == _bindtype._sql_c)
                     {
-                        if ((value is String) && (ccb < ((String)value).Length) && (_bindtype == _originalbindtype))
+                        if ((value is string) && (ccb < ((String)value).Length) && (_bindtype == _originalbindtype))
                         {
                             // silently truncate ... MDAC 84408 ... do not truncate upgraded values ... MDAC 84706
                             ccb = ((String)value).Length;
@@ -569,7 +549,7 @@ namespace System.Data.Odbc
                 }
                 return ADP.DecimalMaxPrecision;
             }
-            if ((null == value) || (value is Decimal) || Convert.IsDBNull(value))
+            if ((null == value) || (value is decimal) || Convert.IsDBNull(value))
             { // MDAC 60882
                 return ADP.DecimalMaxPrecision28;
             }
@@ -590,7 +570,7 @@ namespace System.Data.Odbc
             // If the user specified a lower scale we return the user specified scale,
             // otherwise the values scale
             //
-            byte s = (byte)((Decimal.GetBits((Decimal)value)[3] & 0x00ff0000) >> 0x10);
+            byte s = (byte)((decimal.GetBits((decimal)value)[3] & 0x00ff0000) >> 0x10);
             if ((_internalScale > 0) && (_internalScale < s))
             {
                 return _internalScale;
@@ -722,7 +702,7 @@ namespace System.Data.Odbc
                 case ODBC32.SQL_TYPE.WCHAR: // MDAC 68993
                 case ODBC32.SQL_TYPE.WVARCHAR:
                 case ODBC32.SQL_TYPE.WLONGVARCHAR:
-                    if (value is Char)
+                    if (value is char)
                     {
                         value = value.ToString();
                         size = ((string)value).Length;
@@ -767,26 +747,31 @@ namespace System.Data.Odbc
                 }
             };
 
-            int cbParameterSize = GetParameterSize(value, offset, ordinal);      // count of bytes for the data, for SQLBindParameter
+            int cbParameterSize = GetParameterSize(value, offset, ordinal); // count of bytes for the data, for SQLBindParameter
 
-            // here we upgrade the datatypes if the given values size is bigger than the types columnsize
-            //
+            // Upgrade input value type if the size of input value is bigger than the max size of the input value type.
             switch (_bindtype._sql_type)
             {
-                case ODBC32.SQL_TYPE.VARBINARY: // MDAC 74372
-                    // Note: per definition DbType.Binary does not support more than 8000 bytes so we change the type for binding
-                    if ((cbParameterSize > 8000))
-                    { _bindtype = TypeMap._Image; } // will change to LONGVARBINARY
+                case ODBC32.SQL_TYPE.VARBINARY:
+                    // Max length of VARBINARY is 8,000 of byte array.
+                    if (size > 8000)
+                    {
+                        _bindtype = TypeMap._Image; // will change to LONGVARBINARY
+                    }
                     break;
-                case ODBC32.SQL_TYPE.VARCHAR: // MDAC 74372
-                    // Note: per definition DbType.Binary does not support more than 8000 bytes so we change the type for binding
-                    if ((cbParameterSize > 8000))
-                    { _bindtype = TypeMap._Text; }  // will change to LONGVARCHAR
+                case ODBC32.SQL_TYPE.VARCHAR:
+                    // Max length of VARCHAR is 8,000 of non-unicode characters.
+                    if (size > 8000)
+                    {
+                        _bindtype = TypeMap._Text; // will change to LONGVARCHAR
+                    }
                     break;
-                case ODBC32.SQL_TYPE.WVARCHAR: // MDAC 75099
-                    // Note: per definition DbType.Binary does not support more than 8000 bytes so we change the type for binding
-                    if ((cbParameterSize > 4000))
-                    { _bindtype = TypeMap._NText; }  // will change to WLONGVARCHAR
+                case ODBC32.SQL_TYPE.WVARCHAR:
+                    // Max length of WVARCHAR (NVARCHAR) is 4,000 of unicode characters. 
+                    if (size > 4000)
+                    {
+                        _bindtype = TypeMap._NText; // will change to WLONGVARCHAR
+                    }
                     break;
             }
 
@@ -825,7 +810,7 @@ namespace System.Data.Odbc
                 // for input/output parameters we need to adjust the scale of the input value since the convert function in
                 // sqlsrv32 takes this scale for the output parameter (possible bug in sqlsrv32?)
                 //
-                if ((ODBC32.SQL_PARAM.INPUT_OUTPUT == sqldirection) && (value is Decimal))
+                if ((ODBC32.SQL_PARAM.INPUT_OUTPUT == sqldirection) && (value is decimal))
                 {
                     if (scale < _internalScale)
                     {
@@ -885,7 +870,6 @@ namespace System.Data.Odbc
             {
                 if ("07006" == command.GetDiagSqlState())
                 {
-                    Bid.Trace("<odbc.OdbcParameter.Bind|ERR> Call to BindParameter returned errorcode [07006]\n");
                     command.Connection.FlagRestrictedSqlBindType(_bindtype._sql_type);
                     if (allowReentrance)
                     {
@@ -981,14 +965,14 @@ namespace System.Data.Odbc
                             int lcid = System.Globalization.CultureInfo.CurrentCulture.LCID;
                             CultureInfo culInfo = new CultureInfo(lcid);
                             Encoding cpe = System.Text.Encoding.GetEncoding(culInfo.TextInfo.ANSICodePage);
-                            Value = cpe.GetString((Byte[])Value);
+                            Value = cpe.GetString((byte[])Value);
                         }
                     }
 
                     if ((typemap != _typemap) && (null != Value) && !Convert.IsDBNull(Value) && (Value.GetType() != _typemap._type))
                     {
                         Debug.Assert(ODBC32.SQL_C.NUMERIC == _typemap._sql_c, "unexpected");
-                        Value = Decimal.Parse((string)Value, System.Globalization.CultureInfo.CurrentCulture);
+                        Value = decimal.Parse((string)Value, System.Globalization.CultureInfo.CurrentCulture);
                     }
                 }
             }
@@ -1024,7 +1008,7 @@ namespace System.Data.Odbc
                     }
                     else if (valueType == typeof(char[]))
                     {
-                        value = new String((char[])value);
+                        value = new string((char[])value);
                     }
                 }
             }
@@ -1117,18 +1101,12 @@ namespace System.Data.Odbc
                 case ParameterDirection.InputOutput:
                     return ODBC32.SQL_PARAM.INPUT_OUTPUT;
                 default:
-                    Debug.Assert(false, "Unexpected Direction Property on Parameter");
+                    Debug.Fail("Unexpected Direction Property on Parameter");
                     return ODBC32.SQL_PARAM.INPUT;
             }
         }
 
-        [
-        RefreshProperties(RefreshProperties.All),
-        ResCategoryAttribute(Res.DataCategory_Data),
-        ResDescriptionAttribute(Res.DbParameter_Value),
-        TypeConverterAttribute(typeof(StringConverter)),
-        ]
-        override public object Value
+        public override object Value
         { // V1.2.3300, XXXParameter V1.0.3300
             get
             {
@@ -1154,126 +1132,6 @@ namespace System.Data.Odbc
         private int ValueSize(object value)
         {
             return ValueSizeCore(value);
-        }
-
-        // implemented as nested class to take advantage of the private/protected ShouldSerializeXXX methods
-        internal sealed class OdbcParameterConverter : ExpandableObjectConverter
-        {
-            // converter classes should have public ctor
-            public OdbcParameterConverter()
-            {
-            }
-
-            public override bool CanConvertTo(ITypeDescriptorContext context, Type destinationType)
-            {
-                if (destinationType == typeof(System.ComponentModel.Design.Serialization.InstanceDescriptor))
-                {
-                    return true;
-                }
-                return base.CanConvertTo(context, destinationType);
-            }
-
-            public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
-            {
-                if (destinationType == null)
-                {
-                    throw ADP.ArgumentNull("destinationType");
-                }
-
-                if (destinationType == typeof(System.ComponentModel.Design.Serialization.InstanceDescriptor) && value is OdbcParameter)
-                {
-                    OdbcParameter p = (OdbcParameter)value;
-
-                    // MDAC 67321 - reducing parameter generated code
-                    int flags = 0; // if part of the collection - the parametername can't be empty
-
-                    if (OdbcType.NChar != p.OdbcType)
-                    {
-                        flags |= 1;
-                    }
-                    if (p.ShouldSerializeSize())
-                    {
-                        flags |= 2;
-                    }
-                    if (!ADP.IsEmpty(p.SourceColumn))
-                    {
-                        flags |= 4;
-                    }
-                    if (null != p.Value)
-                    {
-                        flags |= 8;
-                    }
-                    if ((ParameterDirection.Input != p.Direction) || p.IsNullable
-                        || p.ShouldSerializePrecision() || p.ShouldSerializeScale()
-                        || (DataRowVersion.Current != p.SourceVersion))
-                    {
-                        flags |= 16; // V1.0 everything
-                    }
-                    if (p.SourceColumnNullMapping)
-                    {
-                        flags |= 32; // v2.0 everything
-                    }
-
-                    Type[] ctorParams;
-                    object[] ctorValues;
-                    switch (flags)
-                    {
-                        case 0: // ParameterName
-                        case 1: // SqlDbType
-                            ctorParams = new Type[] { typeof(string), typeof(OdbcType) };
-                            ctorValues = new object[] { p.ParameterName, p.OdbcType };
-                            break;
-                        case 2: // Size
-                        case 3: // Size, SqlDbType
-                            ctorParams = new Type[] { typeof(string), typeof(OdbcType), typeof(int) };
-                            ctorValues = new object[] { p.ParameterName, p.OdbcType, p.Size };
-                            break;
-                        case 4: // SourceColumn
-                        case 5: // SourceColumn, SqlDbType
-                        case 6: // SourceColumn, Size
-                        case 7: // SourceColumn, Size, SqlDbType
-                            ctorParams = new Type[] { typeof(string), typeof(OdbcType), typeof(int), typeof(string) };
-                            ctorValues = new object[] { p.ParameterName, p.OdbcType, p.Size, p.SourceColumn };
-                            break;
-                        case 8: // Value
-                            ctorParams = new Type[] { typeof(string), typeof(object) };
-                            ctorValues = new object[] { p.ParameterName, p.Value };
-                            break;
-                        default:
-                            if (0 == (32 & flags))
-                            { // V1.0 everything
-                                ctorParams = new Type[] {
-                                typeof(string), typeof(OdbcType), typeof(int), typeof(ParameterDirection),
-                                typeof(bool), typeof(byte), typeof(byte), typeof(string),
-                                typeof(DataRowVersion), typeof(object) };
-                                ctorValues = new object[] {
-                                p.ParameterName, p.OdbcType,  p.Size, p.Direction,
-                                p.IsNullable, p.PrecisionInternal, p.ScaleInternal, p.SourceColumn,
-                                p.SourceVersion, p.Value };
-                            }
-                            else
-                            { // v2.0 everything - round trip all browsable properties + precision/scale
-                                ctorParams = new Type[] {
-                                typeof(string), typeof(OdbcType), typeof(int), typeof(ParameterDirection),
-                                typeof(byte), typeof(byte),
-                                typeof(string), typeof(DataRowVersion), typeof(bool),
-                                typeof(object) };
-                                ctorValues = new object[] {
-                                p.ParameterName, p.OdbcType,  p.Size, p.Direction,
-                                p.PrecisionInternal, p.ScaleInternal,
-                                p.SourceColumn, p.SourceVersion, p.SourceColumnNullMapping,
-                                p.Value };
-                            }
-                            break;
-                    }
-                    System.Reflection.ConstructorInfo ctor = typeof(OdbcParameter).GetConstructor(ctorParams);
-                    if (null != ctor)
-                    {
-                        return new System.ComponentModel.Design.Serialization.InstanceDescriptor(ctor, ctorValues);
-                    }
-                }
-                return base.ConvertTo(context, culture, value, destinationType);
-            }
         }
     }
 }

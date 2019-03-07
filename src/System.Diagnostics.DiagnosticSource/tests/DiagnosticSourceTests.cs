@@ -179,16 +179,16 @@ namespace System.Diagnostics.Tests
                 DiagnosticSource source = listener;
                 var subscriber1Result = new List<KeyValuePair<string, object>>();
                 Predicate<string> subscriber1Predicate = name => (name == "DataForSubscriber1");
-                var subscriber1Oberserver = new ObserverToList<TelemData>(subscriber1Result);
+                var subscriber1Observer = new ObserverToList<TelemData>(subscriber1Result);
 
                 var subscriber2Result = new List<KeyValuePair<string, object>>();
                 Predicate<string> subscriber2Predicate = name => (name == "DataForSubscriber2");
-                var subscriber2Oberserver = new ObserverToList<TelemData>(subscriber2Result);
+                var subscriber2Observer = new ObserverToList<TelemData>(subscriber2Result);
 
                 // Get two subscribers going. 
-                using (var subscription1 = listener.Subscribe(subscriber1Oberserver, subscriber1Predicate))
+                using (var subscription1 = listener.Subscribe(subscriber1Observer, subscriber1Predicate))
                 {
-                    using (var subscription2 = listener.Subscribe(subscriber2Oberserver, subscriber2Predicate))
+                    using (var subscription2 = listener.Subscribe(subscriber2Observer, subscriber2Predicate))
                     {
                         // Things that neither subscribe to get filtered out. 
                         if (listener.IsEnabled("DataToFilterOut"))
@@ -501,7 +501,7 @@ namespace System.Diagnostics.Tests
         /// Stresses the AllListeners by having many threads be adding and removing.
         /// </summary>
         [OuterLoop]
-        [Theory]
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsNotArm64Process))] // [ActiveIssue(35539)]
         [InlineData(100, 100)] // run multiple times to stress it further
         [InlineData(100, 100)]
         [InlineData(100, 100)]
@@ -600,6 +600,35 @@ namespace System.Diagnostics.Tests
             sub3.Dispose();
         }
 
+        [Fact]
+        public void SubscribeWithNullPredicate()
+        {
+            using (DiagnosticListener listener = new DiagnosticListener("Testing"))
+            {
+                Predicate<string> predicate = null;
+                using (listener.Subscribe(new ObserverToList<TelemData>(new List<KeyValuePair<string, object>>()), predicate))
+                {
+                    Assert.True(listener.IsEnabled("event"));
+                    Assert.True(listener.IsEnabled("event", null));
+                    Assert.True(listener.IsEnabled("event", "arg1"));
+                    Assert.True(listener.IsEnabled("event", "arg1", "arg2"));
+                }
+            }
+
+            using (DiagnosticListener listener = new DiagnosticListener("Testing"))
+            {
+                DiagnosticSource source = listener;
+                Func<string, object, object, bool> predicate = null;
+                using (listener.Subscribe(new ObserverToList<TelemData>(new List<KeyValuePair<string, object>>()), predicate))
+                {
+                    Assert.True(source.IsEnabled("event"));
+                    Assert.True(source.IsEnabled("event", null));
+                    Assert.True(source.IsEnabled("event", "arg1"));
+                    Assert.True(source.IsEnabled("event", "arg1", "arg2"));
+                }
+            }
+        }
+
         #region Helpers 
         /// <summary>
         /// Returns the list of active diagnostic listeners.  
@@ -622,7 +651,7 @@ namespace System.Diagnostics.Tests
         }
 
         /// <summary>
-        /// Used to make an observer out of a action delegate. 
+        /// Used to make an observer out of an action delegate. 
         /// </summary>
         public static IObserver<T> MakeObserver<T>(
             Action<T> onNext = null, Action onCompleted = null)

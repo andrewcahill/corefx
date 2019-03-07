@@ -2,19 +2,31 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using Xunit;
 
 namespace System.Transactions.Tests
 {
     // Ported from Mono
 
-    public class TransactionScopeTest
+    public class TransactionScopeTest : IDisposable
     {
+        public TransactionScopeTest()
+        {
+            // Make sure we start with Transaction.Current = null.
+            Transaction.Current = null;
+        }
+
+        public void Dispose()
+        {
+            Transaction.Current = null;
+        }
+
         [Fact]
         public void TransactionScopeWithInvalidTimeSpanThrows()
         {
-            Assert.Throws<ArgumentNullException>("transactionToUse", () => new TransactionScope(null, TimeSpan.FromSeconds(-1)));
-            Assert.Throws<ArgumentOutOfRangeException>("scopeTimeout", () => new TransactionScope(TransactionScopeOption.Required, TimeSpan.FromSeconds(-1)));
+            AssertExtensions.Throws<ArgumentNullException>("transactionToUse", () => new TransactionScope(null, TimeSpan.FromSeconds(-1)));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("scopeTimeout", () => new TransactionScope(TransactionScopeOption.Required, TimeSpan.FromSeconds(-1)));
         }
 
         [Fact]
@@ -760,7 +772,7 @@ namespace System.Transactions.Tests
                 irm.Value = 2;
                 ct.Commit();
 
-                /* Using a already committed transaction in a new 
+                /* Using an already committed transaction in a new 
                  * TransactionScope
                  */
                 TransactionScope scope = new TransactionScope(ct);
@@ -998,7 +1010,7 @@ namespace System.Transactions.Tests
         [Fact]
         public void ExplicitTransaction12()
         {
-            Assert.Throws<ArgumentException>(() =>
+            AssertExtensions.Throws<ArgumentException>("asyncResult", () =>
             {
                 CommittableTransaction ct = new CommittableTransaction();
 

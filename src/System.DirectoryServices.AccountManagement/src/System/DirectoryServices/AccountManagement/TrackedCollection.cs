@@ -18,20 +18,20 @@ namespace System.DirectoryServices.AccountManagement
         {
             // Parameter validation
             if (index < 0)
-                throw new ArgumentOutOfRangeException("index");
+                throw new ArgumentOutOfRangeException(nameof(index));
 
             if (array == null)
-                throw new ArgumentNullException("array");
+                throw new ArgumentNullException(nameof(array));
 
             if (array.Rank != 1)
-                throw new ArgumentException(StringResources.TrackedCollectionNotOneDimensional);
+                throw new ArgumentException(SR.TrackedCollectionNotOneDimensional);
 
             if (index >= array.GetLength(0))
-                throw new ArgumentException(StringResources.TrackedCollectionIndexNotInArray);
+                throw new ArgumentException(SR.TrackedCollectionIndexNotInArray);
 
             // Make sure the array has enough space, allowing for the "index" offset
             if ((array.GetLength(0) - index) < this.combinedValues.Count)
-                throw new ArgumentException(StringResources.TrackedCollectionArrayTooSmall);
+                throw new ArgumentException(SR.TrackedCollectionArrayTooSmall);
 
             // Copy out the original and inserted values
             foreach (ValueEl el in this.combinedValues)

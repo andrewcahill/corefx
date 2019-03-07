@@ -3,10 +3,11 @@
 // See the LICENSE file in the project root for more information.
 
 using Xunit;
+using System.Linq;
 
 namespace System.IO.Tests
 {
-    public class File_Move : FileSystemTest
+    public partial class File_Move : FileSystemTest
     {
         #region Utilities
 
@@ -43,18 +44,38 @@ namespace System.IO.Tests
             Assert.Throws<FileNotFoundException>(() => Move(Path.Combine(TestDirectory, GetTestFileName(), GetTestFileName()), testFile.FullName));
         }
 
-        [Theory MemberData(nameof(PathsWithInvalidCharacters))]
-        public void PathWithIllegalCharacters(string invalidPath)
+        [Theory, MemberData(nameof(PathsWithInvalidCharacters))]
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework)]
+        public void PathWithIllegalCharacters_Desktop(string invalidPath)
         {
             FileInfo testFile = new FileInfo(GetTestFilePath());
             testFile.Create().Dispose();
 
-            // Under legacy normalization we kick \\?\ paths back as invalid with ArgumentException
-            // New style we don't prevalidate \\?\ at all
-            if (invalidPath.Contains(@"\\?\") && !PathFeatures.IsUsingLegacyPathNormalization())
-                Assert.Throws<IOException>(() => Move(testFile.FullName, invalidPath));
-            else
+            Assert.Throws<ArgumentException>(() => Move(testFile.FullName, invalidPath));
+        }
+
+        [Theory, MemberData(nameof(PathsWithInvalidCharacters))]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)]
+        public void PathWithIllegalCharacters_Core(string invalidPath)
+        {
+            FileInfo testFile = new FileInfo(GetTestFilePath());
+            testFile.Create().Dispose();
+
+            if (invalidPath.Contains('\0'.ToString()))
+            {
                 Assert.Throws<ArgumentException>(() => Move(testFile.FullName, invalidPath));
+            }
+            else
+            {
+                if (PlatformDetection.IsInAppContainer)
+                {
+                    AssertExtensions.ThrowsAny<IOException, UnauthorizedAccessException>(() => Move(testFile.FullName, invalidPath));
+                }
+                else
+                {
+                    Assert.ThrowsAny<IOException>(() => Move(testFile.FullName, invalidPath));
+                }
+            }
         }
 
         [Fact]
@@ -121,6 +142,34 @@ namespace System.IO.Tests
         }
 
         [Fact]
+        public void MoveToSameName()
+        {
+            string testDir = GetTestFilePath();
+            Directory.CreateDirectory(testDir);
+
+            FileInfo testFileSource = new FileInfo(Path.Combine(testDir, GetTestFileName()));
+            testFileSource.Create().Dispose();
+
+            Move(testFileSource.FullName, testFileSource.FullName);
+            Assert.True(File.Exists(testFileSource.FullName));
+        }
+
+        [Fact]
+        public void MoveToSameNameDifferentCasing()
+        {
+            string testDir = GetTestFilePath();
+            Directory.CreateDirectory(testDir);
+
+            FileInfo testFileSource = new FileInfo(Path.Combine(testDir, Path.GetRandomFileName().ToLowerInvariant()));
+            testFileSource.Create().Dispose();
+
+            FileInfo testFileDest = new FileInfo(Path.Combine(testFileSource.DirectoryName, testFileSource.Name.ToUpperInvariant()));
+
+            Move(testFileSource.FullName, testFileDest.FullName);
+            Assert.True(File.Exists(testFileDest.FullName));
+        }
+
+        [Fact]
         public void MultipleMoves()
         {
             FileInfo testFileSource = new FileInfo(GetTestFilePath());
@@ -148,7 +197,7 @@ namespace System.IO.Tests
         }
 
         [ConditionalFact(nameof(AreAllLongPathsAvailable))]
-        [SkipOnTargetFramework(TargetFrameworkMonikers.Uap | TargetFrameworkMonikers.UapAot)]
+        [ActiveIssue(32167, TargetFrameworkMonikers.NetFramework)]
         [PlatformSpecific(TestPlatforms.Windows)]  // Path longer than max path limit
         public void OverMaxPathWorks_Windows()
         {
@@ -178,18 +227,17 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        [PlatformSpecific(TestPlatforms.AnyUnix)]  // Path longer than max Windows path limit throws
+        [PlatformSpecific(TestPlatforms.AnyUnix)]
         public void LongPath()
         {
-            //Create a destination path longer than the traditional Windows limit of 256 characters
             string testFileSource = Path.Combine(TestDirectory, GetTestFileName());
             File.Create(testFileSource).Dispose();
 
             Assert.All(IOInputs.GetPathsLongerThanMaxLongPath(GetTestFilePath()), (path) =>
             {
-                Assert.Throws<PathTooLongException>(() => Move(testFileSource, path));
+                AssertExtensions.ThrowsAny<PathTooLongException, FileNotFoundException, DirectoryNotFoundException>(() => Move(testFileSource, path));
                 File.Delete(testFileSource);
-                Assert.Throws<PathTooLongException>(() => Move(path, testFileSource));
+                AssertExtensions.ThrowsAny<PathTooLongException, FileNotFoundException, DirectoryNotFoundException>(() => Move(path, testFileSource));
             });
         }
 
@@ -197,26 +245,58 @@ namespace System.IO.Tests
 
         #region PlatformSpecific
 
-        // This is updated to be correct, need to update CoreCLR path code so this will pass on all platforms
-        [ActiveIssue(15098)]
-        [Theory MemberData(nameof(PathsWithInvalidColons))]
-        [PlatformSpecific(TestPlatforms.Windows)]  // Illegal colons throws ArgumentException
-        public void WindowsPathWithIllegalColons(string invalidPath)
+        [Theory, MemberData(nameof(PathsWithInvalidColons))]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework)]
+        public void WindowsPathWithIllegalColons_Desktop(string invalidPath)
         {
             FileInfo testFile = new FileInfo(GetTestFilePath());
             testFile.Create().Dispose();
-            Assert.Throws<ArgumentException>(() => Move(testFile.FullName, invalidPath));
+            if (PathFeatures.IsUsingLegacyPathNormalization())
+            {
+                Assert.Throws<ArgumentException>(() => Move(testFile.FullName, invalidPath));
+            }
+            else
+            {
+                if (invalidPath.Contains('|'))
+                    Assert.Throws<ArgumentException>(() => Move(testFile.FullName, invalidPath));
+                else
+                    Assert.Throws<NotSupportedException>(() => Move(testFile.FullName, invalidPath));
+            }
+        }
+
+        [Theory, MemberData(nameof(PathsWithInvalidColons))]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)]
+        public void WindowsPathWithIllegalColons_Core(string invalidPath)
+        {
+            FileInfo testFile = new FileInfo(GetTestFilePath());
+            testFile.Create().Dispose();
+            Assert.ThrowsAny<IOException>(() => Move(testFile.FullName, testFile.DirectoryName + Path.DirectorySeparatorChar + invalidPath));
         }
 
         [Fact]
-        [PlatformSpecific(TestPlatforms.Windows)]  // Wild characters in path throw ArgumentException
-        public void WindowsWildCharacterPath()
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework)]
+        public void WindowsWildCharacterPath_Desktop()
         {
             Assert.Throws<ArgumentException>(() => Move("*", GetTestFilePath()));
             Assert.Throws<ArgumentException>(() => Move(GetTestFilePath(), "*"));
             Assert.Throws<ArgumentException>(() => Move(GetTestFilePath(), "Test*t"));
             Assert.Throws<ArgumentException>(() => Move(GetTestFilePath(), "*Test"));
         }
+
+        [Fact]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)]
+        public void WindowsWildCharacterPath_Core()
+        {
+            Assert.Throws<FileNotFoundException>(() => Move(Path.Combine(TestDirectory, "*"), GetTestFilePath()));
+            Assert.Throws<FileNotFoundException>(() => Move(GetTestFilePath(), Path.Combine(TestDirectory, "*")));
+            Assert.Throws<FileNotFoundException>(() => Move(GetTestFilePath(), Path.Combine(TestDirectory, "Test*t")));
+            Assert.Throws<FileNotFoundException>(() => Move(GetTestFilePath(), Path.Combine(TestDirectory, "*Test")));
+        }
+
 
         [Fact]
         [PlatformSpecific(TestPlatforms.AnyUnix)]  // Wild characters in path are allowed
@@ -242,30 +322,71 @@ namespace System.IO.Tests
             Assert.True(File.Exists(testFileShouldntMove));
         }
 
-        [Fact]
-        [PlatformSpecific(TestPlatforms.Windows)]  // Whitespace in path throws ArgumentException
-        public void WindowsWhitespacePath()
+        [Theory,
+            MemberData(nameof(ControlWhiteSpace))]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework)]
+        public void WindowsControlPath_Desktop(string whitespace)
         {
             FileInfo testFile = new FileInfo(GetTestFilePath());
-            Assert.All(IOInputs.GetWhiteSpace(), (whitespace) =>
-            {
-                Assert.Throws<ArgumentException>(() => Move(testFile.FullName, whitespace));
-            });
+            Assert.Throws<ArgumentException>(() => Move(testFile.FullName, whitespace));
         }
 
-        [Fact]
+        [Theory,
+            MemberData(nameof(ControlWhiteSpace))]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)]
+        public void WindowsControlPath_Core(string whitespace)
+        {
+            FileInfo testFile = new FileInfo(GetTestFilePath());
+            Assert.ThrowsAny<IOException>(() => Move(testFile.FullName, Path.Combine(TestDirectory, whitespace)));
+        }
+
+        [Theory,
+            MemberData(nameof(SimpleWhiteSpace))]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        public void WindowsSimpleWhitespacePath(string whitespace)
+        {
+            FileInfo testFile = new FileInfo(GetTestFilePath());
+            Assert.Throws<ArgumentException>(() => Move(testFile.FullName, whitespace));
+        }
+
+        [Theory,
+            MemberData(nameof(WhiteSpace))]
         [PlatformSpecific(TestPlatforms.AnyUnix)]  // Whitespace in path allowed
-        public void UnixWhitespacePath()
+        public void UnixWhitespacePath(string whitespace)
         {
             FileInfo testFileSource = new FileInfo(GetTestFilePath());
             testFileSource.Create().Dispose();
-            Assert.All(IOInputs.GetWhiteSpace(), (whitespace) =>
-            {
-                Move(testFileSource.FullName, Path.Combine(TestDirectory, whitespace));
-                Move(Path.Combine(TestDirectory, whitespace), testFileSource.FullName);
-            });
+
+            Move(testFileSource.FullName, Path.Combine(TestDirectory, whitespace));
+            Move(Path.Combine(TestDirectory, whitespace), testFileSource.FullName);
+
         }
 
+        [Theory,
+            InlineData("", ":bar"),
+            InlineData("", ":bar:$DATA"),
+            InlineData("::$DATA", ":bar"),
+            InlineData("::$DATA", ":bar:$DATA")]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)]
+        public void WindowsAlternateDataStreamMove(string defaultStream, string alternateStream)
+        {
+            DirectoryInfo testDirectory = Directory.CreateDirectory(GetTestFilePath());
+            string testFile = Path.Combine(testDirectory.FullName, GetTestFileName());
+            string testFileDefaultStream = testFile + defaultStream;
+            string testFileAlternateStream = testFile + alternateStream;
+
+            // Cannot move into an alternate stream
+            File.WriteAllText(testFileDefaultStream, "Foo");
+            Assert.Throws<IOException>(() => Move(testFileDefaultStream, testFileAlternateStream));
+
+            // Cannot move out of an alternate stream
+            File.WriteAllText(testFileAlternateStream, "Bar");
+            string testFile2 = Path.Combine(testDirectory.FullName, GetTestFileName());
+            Assert.Throws<IOException>(() => Move(testFileAlternateStream, testFile2));
+        }
         #endregion
     }
 }

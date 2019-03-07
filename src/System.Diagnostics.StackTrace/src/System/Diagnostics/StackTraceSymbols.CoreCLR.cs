@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -12,14 +13,14 @@ namespace System.Diagnostics
 {
     internal class StackTraceSymbols : IDisposable
     {
-        private readonly Dictionary<IntPtr, MetadataReaderProvider> _metadataCache;
+        private readonly ConcurrentDictionary<IntPtr, MetadataReaderProvider> _metadataCache;
 
         /// <summary>
         /// Create an instance of this class.
         /// </summary>
         public StackTraceSymbols()
         {
-            _metadataCache = new Dictionary<IntPtr, MetadataReaderProvider>();
+            _metadataCache = new ConcurrentDictionary<IntPtr, MetadataReaderProvider>();
         }
 
         /// <summary>
@@ -29,7 +30,7 @@ namespace System.Diagnostics
         {
             foreach (MetadataReaderProvider provider in _metadataCache.Values)
             {
-                provider.Dispose();
+                provider?.Dispose();
             }
 
             _metadataCache.Clear();
@@ -48,7 +49,28 @@ namespace System.Diagnostics
         /// <param name="sourceFile">source file return</param>
         /// <param name="sourceLine">line number return</param>
         /// <param name="sourceColumn">column return</param>
-        internal void GetSourceLineInfo(string assemblyPath, IntPtr loadedPeAddress, int loadedPeSize, 
+        internal void GetSourceLineInfo(string assemblyPath, IntPtr loadedPeAddress, int loadedPeSize,
+            IntPtr inMemoryPdbAddress, int inMemoryPdbSize, int methodToken, int ilOffset,
+            out string sourceFile, out int sourceLine, out int sourceColumn)
+        {
+            GetSourceLineInfo(null, assemblyPath, loadedPeAddress, loadedPeSize, inMemoryPdbAddress, inMemoryPdbSize, methodToken, ilOffset, out sourceFile, out sourceLine, out sourceColumn);
+        }
+
+        /// <summary>
+        /// Returns the source file and line number information for the method.
+        /// </summary>
+        /// <param name="assembly">Will be used by upcoming change</param>
+        /// <param name="assemblyPath">file path of the assembly or null</param>
+        /// <param name="loadedPeAddress">loaded PE image address or zero</param>
+        /// <param name="loadedPeSize">loaded PE image size</param>
+        /// <param name="inMemoryPdbAddress">in memory PDB address or zero</param>
+        /// <param name="inMemoryPdbSize">in memory PDB size</param>
+        /// <param name="methodToken">method token</param>
+        /// <param name="ilOffset">il offset of the stack frame</param>
+        /// <param name="sourceFile">source file return</param>
+        /// <param name="sourceLine">line number return</param>
+        /// <param name="sourceColumn">column return</param>
+        internal void GetSourceLineInfo(Assembly assembly, string assemblyPath, IntPtr loadedPeAddress, int loadedPeSize, 
             IntPtr inMemoryPdbAddress, int inMemoryPdbSize, int methodToken, int ilOffset, 
             out string sourceFile, out int sourceLine, out int sourceColumn)
         {
@@ -105,7 +127,6 @@ namespace System.Diagnostics
         /// <param name="loadedPeSize">loaded PE image size</param>
         /// <param name="inMemoryPdbAddress">in memory PDB address or zero</param>
         /// <param name="inMemoryPdbSize">in memory PDB size</param>
-        /// <param name="reader">returns the reader</param>
         /// <returns>reader</returns>
         /// <remarks>
         /// Assumes that neither PE image nor PDB loaded into memory can be unloaded or moved around.
@@ -121,24 +142,22 @@ namespace System.Diagnostics
             IntPtr cacheKey = (inMemoryPdbAddress != IntPtr.Zero) ? inMemoryPdbAddress : loadedPeAddress;
 
             MetadataReaderProvider provider;
-            if (_metadataCache.TryGetValue(cacheKey, out provider))
+            while (!_metadataCache.TryGetValue(cacheKey, out provider))
             {
-                return provider.GetMetadataReader();
+                provider = (inMemoryPdbAddress != IntPtr.Zero) ?
+                            TryOpenReaderForInMemoryPdb(inMemoryPdbAddress, inMemoryPdbSize) :
+                            TryOpenReaderFromAssemblyFile(assemblyPath, loadedPeAddress, loadedPeSize);
+
+                 // If the add loses the race with another thread, then the dispose the provider just 
+                 // created and return the provider already in the cache.
+                 if (_metadataCache.TryAdd(cacheKey, provider))
+                     break;
+
+                 provider?.Dispose();
             }
 
-            provider = (inMemoryPdbAddress != IntPtr.Zero) ?
-                TryOpenReaderForInMemoryPdb(inMemoryPdbAddress, inMemoryPdbSize) :
-                TryOpenReaderFromAssemblyFile(assemblyPath, loadedPeAddress, loadedPeSize);
-
-            if (provider == null)
-            {
-                return null;
-            }
-
-            _metadataCache.Add(cacheKey, provider);
-
-            // The reader has already been open, so this doesn't throw:
-            return provider.GetMetadataReader();
+            // The reader has already been open, so this doesn't throw.
+            return provider?.GetMetadataReader();
         }
 
         private static unsafe MetadataReaderProvider TryOpenReaderForInMemoryPdb(IntPtr inMemoryPdbAddress, int inMemoryPdbSize)
@@ -198,7 +217,7 @@ namespace System.Diagnostics
                 if (peReader.TryOpenAssociatedPortablePdb(assemblyPath, TryOpenFile, out provider, out pdbPath))
                 {
                     // TODO: 
-                    // Consider caching the provider in a global cache (accross stack traces) if the PDB is embedded (pdbPath == null),
+                    // Consider caching the provider in a global cache (across stack traces) if the PDB is embedded (pdbPath == null),
                     // as decompressing embedded PDB takes some time.
                     return provider;
                 }

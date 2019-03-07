@@ -4,10 +4,11 @@
 
 using System.Collections.Generic;
 using System.IO;
-using System.Xml.Serialization;
-using System.Xml.Schema;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Serialization;
+using System.Xml.Schema;
 
 using CultureInfo = System.Globalization.CultureInfo;
 using IEnumerable = System.Collections.IEnumerable;
@@ -31,6 +32,7 @@ namespace System.Xml.Linq
     ///   </list>
     /// </remarks>
     [XmlSchemaProvider(null, IsAny = true)]
+    [System.ComponentModel.TypeDescriptionProvider("MS.Internal.Xml.Linq.ComponentModel.XTypeDescriptionProvider`1[[System.Xml.Linq.XElement, System.Xml.Linq, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]],System.ComponentModel.TypeConverter")]
     public class XElement : XContainer, IXmlSerializable
     {
         /// <summary>
@@ -129,7 +131,13 @@ namespace System.Xml.Linq
             AddContentSkipNotify(other.content);
         }
 
+#if uap
+        // XmlSerializer needs to reflect on the default constructor of XElement.
+        // We need to make the ctor public on UWP to keep the metadata for it.
         public XElement()
+#else
+        internal XElement()
+#endif
             : this("default")
         {
         }
@@ -1861,7 +1869,7 @@ namespace System.Xml.Linq
         }
 
         /// <summary>
-        /// Generates a <see cref="XElement"/> from its XML respresentation.
+        /// Generates a <see cref="XElement"/> from its XML representation.
         /// </summary>
         /// <param name="reader">
         /// The <see cref="XmlReader"/> stream from which the <see cref="XElement"/>

@@ -1574,12 +1574,12 @@ namespace System.Xml
 
         internal static Exception CreateReadContentAsException(string methodName, XmlNodeType nodeType, IXmlLineInfo lineInfo)
         {
-            return new InvalidOperationException(AddLineInfo(SR.Format(SR.Xml_InvalidReadContentAs, new string[] { methodName, nodeType.ToString() }), lineInfo));
+            return new InvalidOperationException(AddLineInfo(SR.Format(SR.Xml_InvalidReadContentAs, methodName, nodeType), lineInfo));
         }
 
         internal static Exception CreateReadElementContentAsException(string methodName, XmlNodeType nodeType, IXmlLineInfo lineInfo)
         {
-            return new InvalidOperationException(AddLineInfo(SR.Format(SR.Xml_InvalidReadElementContentAs, new string[] { methodName, nodeType.ToString() }), lineInfo));
+            return new InvalidOperationException(AddLineInfo(SR.Format(SR.Xml_InvalidReadElementContentAs, methodName, nodeType), lineInfo));
         }
 
         private static string AddLineInfo(string message, IXmlLineInfo lineInfo)
@@ -1709,12 +1709,6 @@ namespace System.Xml
             }
         }
 
-        internal static Encoding GetEncoding(XmlReader reader)
-        {
-            XmlTextReaderImpl tri = GetXmlTextReaderImpl(reader);
-            return tri != null ? tri.Encoding : null;
-        }
-
         internal static ConformanceLevel GetV1ConformanceLevel(XmlReader reader)
         {
             XmlTextReaderImpl tri = GetXmlTextReaderImpl(reader);
@@ -1768,7 +1762,7 @@ namespace System.Xml
         }
 
         // Creates an XmlReader according to the settings and parser context for parsing XML from the given Uri.
-        public static XmlReader Create(String inputUri, XmlReaderSettings settings, XmlParserContext inputContext)
+        public static XmlReader Create(string inputUri, XmlReaderSettings settings, XmlParserContext inputContext)
         {
             if (settings == null)
             {
@@ -1790,7 +1784,7 @@ namespace System.Xml
         }
 
         // Creates an XmlReader according to the settings and base Uri for parsing XML from the given stream.
-        public static XmlReader Create(Stream input, XmlReaderSettings settings, String baseUri)
+        public static XmlReader Create(Stream input, XmlReaderSettings settings, string baseUri)
         {
             if (settings == null)
             {
@@ -1822,7 +1816,7 @@ namespace System.Xml
         }
 
         // Creates an XmlReader according to the settings and baseUri for parsing XML from the given TextReader.
-        public static XmlReader Create(TextReader input, XmlReaderSettings settings, String baseUri)
+        public static XmlReader Create(TextReader input, XmlReaderSettings settings, string baseUri)
         {
             if (settings == null)
             {
@@ -1851,12 +1845,15 @@ namespace System.Xml
             return settings.CreateReader(reader);
         }
 
-		// TODO: Validate if this comment is still valid
         // !!!!!!
         // NOTE: This method is called via reflection from System.Data.dll and from Analysis Services in Yukon. 
         // Do not change its signature without notifying the appropriate teams!
         // !!!!!!
+#if UAPAOT
+        public static XmlReader CreateSqlReader(Stream input, XmlReaderSettings settings, XmlParserContext inputContext)
+#else
         internal static XmlReader CreateSqlReader(Stream input, XmlReaderSettings settings, XmlParserContext inputContext)
+#endif
         {
             if (input == null)
             {
@@ -1878,7 +1875,7 @@ namespace System.Xml
             {
                 read = input.Read(bytes, byteCount, bytes.Length - byteCount);
                 byteCount += read;
-            } while (read > 0 && byteCount < 2);
+            } while (read > 0 && byteCount< 2);
 
             // create text or binary XML reader depenting on the stream first 2 bytes
             if (byteCount >= 2 && (bytes[0] == 0xdf && bytes[1] == 0xff))

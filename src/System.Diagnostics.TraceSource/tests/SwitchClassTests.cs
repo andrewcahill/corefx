@@ -10,9 +10,9 @@ namespace System.Diagnostics.TraceSourceTests
     {
         class TestSwitch : Switch
         {
-            public TestSwitch(String description = null) : base(null, description) { }
+            public TestSwitch(string description = null) : base(null, description) { }
 
-            public String SwitchValue
+            public string SwitchValue
             {
                 get { return this.Value; }
                 set { this.Value = value; }
@@ -48,7 +48,6 @@ namespace System.Diagnostics.TraceSourceTests
         {
             var strongSwitch = new TestSwitch();
             var weakSwitch = PruneMakeRef();
-            Assert.True(weakSwitch.IsAlive);
             GC.Collect(2);
             Trace.Refresh();
             Assert.False(weakSwitch.IsAlive);

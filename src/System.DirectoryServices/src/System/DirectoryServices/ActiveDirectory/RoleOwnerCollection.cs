@@ -2,14 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections;
+using System.ComponentModel;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Collections;
-    using System.Globalization;
-    using System.ComponentModel;
-    using System.Runtime.InteropServices;
-
     public class ActiveDirectoryRoleCollection : ReadOnlyCollectionBase
     {
         internal ActiveDirectoryRoleCollection() { }
@@ -22,19 +19,13 @@ namespace System.DirectoryServices.ActiveDirectory
             }
         }
 
-        public ActiveDirectoryRole this[int index]
-        {
-            get
-            {
-                return (ActiveDirectoryRole)InnerList[index];
-            }
-        }
+        public ActiveDirectoryRole this[int index] => (ActiveDirectoryRole)InnerList[index];
 
         public bool Contains(ActiveDirectoryRole role)
         {
             if (role < ActiveDirectoryRole.SchemaRole || role > ActiveDirectoryRole.InfrastructureRole)
             {
-                throw new InvalidEnumArgumentException("role", (int)role, typeof(ActiveDirectoryRole));
+                throw new InvalidEnumArgumentException(nameof(role), (int)role, typeof(ActiveDirectoryRole));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -52,7 +43,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (role < ActiveDirectoryRole.SchemaRole || role > ActiveDirectoryRole.InfrastructureRole)
             {
-                throw new InvalidEnumArgumentException("role", (int)role, typeof(ActiveDirectoryRole));
+                throw new InvalidEnumArgumentException(nameof(role), (int)role, typeof(ActiveDirectoryRole));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -86,19 +77,13 @@ namespace System.DirectoryServices.ActiveDirectory
             }
         }
 
-        public AdamRole this[int index]
-        {
-            get
-            {
-                return (AdamRole)InnerList[index];
-            }
-        }
+        public AdamRole this[int index] => (AdamRole)InnerList[index];
 
         public bool Contains(AdamRole role)
         {
             if (role < AdamRole.SchemaRole || role > AdamRole.NamingRole)
             {
-                throw new InvalidEnumArgumentException("role", (int)role, typeof(AdamRole));
+                throw new InvalidEnumArgumentException(nameof(role), (int)role, typeof(AdamRole));
             }
 
             for (int i = 0; i < InnerList.Count; i++)
@@ -116,7 +101,7 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             if (role < AdamRole.SchemaRole || role > AdamRole.NamingRole)
             {
-                throw new InvalidEnumArgumentException("role", (int)role, typeof(AdamRole));
+                throw new InvalidEnumArgumentException(nameof(role), (int)role, typeof(AdamRole));
             }
 
             for (int i = 0; i < InnerList.Count; i++)

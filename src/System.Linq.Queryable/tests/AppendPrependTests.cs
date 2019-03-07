@@ -1,3 +1,7 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 using System.Collections.Generic;
 using Xunit;
 
@@ -8,8 +12,8 @@ namespace System.Linq.Tests
         [Fact]
         public void SourceNull()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Append(1));
-            Assert.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Prepend(1));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Append(1));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IQueryable<int>)null).Prepend(1));
         }
 
         [Theory]

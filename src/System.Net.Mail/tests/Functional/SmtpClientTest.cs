@@ -10,16 +10,16 @@
 //
 
 using System.IO;
+using System.Net.NetworkInformation;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
 namespace System.Net.Mail.Tests
 {
-    public class SmtpClientTest : IDisposable
+    public class SmtpClientTest : FileCleanupTestBase
     {
         private SmtpClient _smtp;
-        private string _tempFolder;
 
         private SmtpClient Smtp
         {
@@ -33,28 +33,17 @@ namespace System.Net.Mail.Tests
         {
             get
             {
-                if (_tempFolder == null)
-                {
-                    _tempFolder = Path.Combine(Path.GetTempPath(), GetType().FullName, Guid.NewGuid().ToString());
-                    if (Directory.Exists(_tempFolder))
-                        Directory.Delete(_tempFolder, true);
-
-                    Directory.CreateDirectory(_tempFolder);
-                }
-
-                return _tempFolder;
+                return TestDirectory;
             }
         }
 
-        public void Dispose()
+        protected override void Dispose(bool disposing)
         {
             if (_smtp != null)
             {
                 _smtp.Dispose();
             }
-
-            if (Directory.Exists(_tempFolder))
-                Directory.Delete(_tempFolder, true);
+            base.Dispose(disposing);
         }
 
         [Theory]
@@ -89,7 +78,7 @@ namespace System.Net.Mail.Tests
         public void InvalidHostTest()
         {
             Assert.Throws<ArgumentNullException>(() => Smtp.Host = null);
-            Assert.Throws<ArgumentException>(() => Smtp.Host = "");
+            AssertExtensions.Throws<ArgumentException>("value", () => Smtp.Host = "");
         }
 
         [Fact]
@@ -129,7 +118,7 @@ namespace System.Net.Mail.Tests
             }
         }
 
-        [SkipOnTargetFramework(TargetFrameworkMonikers.Netcoreapp)]
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework)]
         [Fact]
         public void ServicePoint_NetFramework_AddressIsInaccessible()
         {
@@ -271,12 +260,31 @@ namespace System.Net.Mail.Tests
         }
 
         [Fact]
+        public void Send_ServerDoesntExist_Throws()
+        {
+            using (var smtp = new SmtpClient(Guid.NewGuid().ToString("N")))
+            {
+                Assert.Throws<SmtpException>(() => smtp.Send("anyone@anyone.com", "anyone@anyone.com", "subject", "body"));
+            }
+        }
+
+        [Fact]
+        public async Task SendAsync_ServerDoesntExist_Throws()
+        {
+            using (var smtp = new SmtpClient(Guid.NewGuid().ToString("N")))
+            {
+                await Assert.ThrowsAsync<SmtpException>(() => smtp.SendMailAsync("anyone@anyone.com", "anyone@anyone.com", "subject", "body"));
+            }
+        }
+
+        [Fact]
         public void TestMailDelivery()
         {
             SmtpServer server = new SmtpServer();
             SmtpClient client = new SmtpClient("localhost", server.EndPoint.Port);
             client.Credentials = new NetworkCredential("user", "password");
             MailMessage msg = new MailMessage("foo@example.com", "bar@example.com", "hello", "howdydoo");
+            string clientDomain = IPGlobalProperties.GetIPGlobalProperties().HostName.Trim().ToLower();
 
             try
             {
@@ -289,6 +297,7 @@ namespace System.Net.Mail.Tests
                 Assert.Equal("<bar@example.com>", server.MailTo);
                 Assert.Equal("hello", server.Subject);
                 Assert.Equal("howdydoo", server.Body);
+                Assert.Equal(clientDomain, server.ClientDomain);
             }
             finally
             {
@@ -302,6 +311,7 @@ namespace System.Net.Mail.Tests
             SmtpServer server = new SmtpServer();
             SmtpClient client = new SmtpClient("localhost", server.EndPoint.Port);
             MailMessage msg = new MailMessage("foo@example.com", "bar@example.com", "hello", "howdydoo");
+            string clientDomain = IPGlobalProperties.GetIPGlobalProperties().HostName.Trim().ToLower();
 
             try
             {
@@ -314,6 +324,7 @@ namespace System.Net.Mail.Tests
                 Assert.Equal("<bar@example.com>", server.MailTo);
                 Assert.Equal("hello", server.Subject);
                 Assert.Equal("howdydoo", server.Body);
+                Assert.Equal(clientDomain, server.ClientDomain);
             }
             finally
             {
@@ -327,6 +338,7 @@ namespace System.Net.Mail.Tests
             SmtpServer server = new SmtpServer();
             SmtpClient client = new SmtpClient("localhost", server.EndPoint.Port);
             MailMessage msg = new MailMessage("foo@example.com", "bar@example.com", "hello", "howdydoo");
+            string clientDomain = IPGlobalProperties.GetIPGlobalProperties().HostName.Trim().ToLower();
 
             CredentialCache cache = new CredentialCache();
             cache.Add("localhost", server.EndPoint.Port, "NTLM", CredentialCache.DefaultNetworkCredentials);
@@ -344,6 +356,76 @@ namespace System.Net.Mail.Tests
                 Assert.Equal("<bar@example.com>", server.MailTo);
                 Assert.Equal("hello", server.Subject);
                 Assert.Equal("howdydoo", server.Body);
+                Assert.Equal(clientDomain, server.ClientDomain);
+            }
+            finally
+            {
+                server.Stop();
+            }
+        }
+
+
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "NETFX doesn't have the fix for encoding")]
+        [Theory]
+        [InlineData(false, false, false)]
+        [InlineData(false, false, true)] // Received subjectText.
+        [InlineData(false, true, false)]
+        [InlineData(false, true, true)]
+        [InlineData(true, false, false)]
+        [InlineData(true, false, true)] // Received subjectText.
+        [InlineData(true, true, false)]
+        [InlineData(true, true, true)] // Received subjectBase64. If subjectText is received, the test fails, and the results are inconsistent with those of synchronous methods.
+        public void SendMail_DeliveryFormat_SubjectEncoded(bool useAsyncSend, bool useSevenBit, bool useSmtpUTF8)
+        {
+            // If the server support `SMTPUTF8` and use `SmtpDeliveryFormat.International`, the server should received this subject.
+            const string subjectText = "Test \u6d4b\u8bd5 Contain \u5305\u542b UTF8";
+
+            // If the server does not support `SMTPUTF8` or use `SmtpDeliveryFormat.SevenBit`, the server should received this subject.
+            const string subjectBase64 = "=?utf-8?B?VGVzdCDmtYvor5UgQ29udGFpbiDljIXlkKsgVVRGOA==?=";
+
+            SmtpServer server = new SmtpServer();
+
+            // Setting up Server Support for `SMTPUTF8`.
+            server.SupportSmtpUTF8 = useSmtpUTF8;
+
+            SmtpClient client = new SmtpClient("localhost", server.EndPoint.Port);
+            
+            if (useSevenBit)
+            {
+                // Subject will be encoded by Base64.
+                client.DeliveryFormat = SmtpDeliveryFormat.SevenBit;
+            }
+            else
+            {
+                // If the server supports `SMTPUTF8`, subject will not be encoded. Otherwise, subject will be encoded by Base64.
+                client.DeliveryFormat = SmtpDeliveryFormat.International;
+            }
+
+            MailMessage msg = new MailMessage("foo@example.com", "bar@example.com", subjectText, "hello \u9ad8\u575a\u679c");
+            msg.HeadersEncoding = msg.BodyEncoding = msg.SubjectEncoding = System.Text.Encoding.UTF8;
+
+            try
+            {
+                Thread t = new Thread(server.Run);
+                t.Start();
+
+                if (useAsyncSend)
+                {
+                    client.SendMailAsync(msg).Wait(); 
+                }
+                else
+                {
+                    client.Send(msg);
+                }
+
+                if (useSevenBit || !useSmtpUTF8)
+                {
+                    Assert.Equal(subjectBase64, server.Subject);
+                }
+                else
+                {
+                    Assert.Equal(subjectText, server.Subject);
+                }
             }
             finally
             {

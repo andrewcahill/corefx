@@ -55,7 +55,7 @@ namespace System.Runtime.Serialization.Json
             JsonReadWriteDelegates result = GetGeneratedReadWriteDelegates(c);
             if (result == null)
             {
-                throw new InvalidDataContractException(SR.Format(SR.SerializationCodeIsMissingForType, c.UnderlyingType.ToString()));
+                throw new InvalidDataContractException(SR.Format(SR.SerializationCodeIsMissingForType, c.UnderlyingType));
             }
             else
             {
@@ -184,7 +184,7 @@ namespace System.Runtime.Serialization.Json
                         int value = s_dataContractID++;
                         if (value >= s_dataContractCache.Length)
                         {
-                            int newSize = (value < Int32.MaxValue / 2) ? value * 2 : Int32.MaxValue;
+                            int newSize = (value < int.MaxValue / 2) ? value * 2 : int.MaxValue;
                             if (newSize <= value)
                             {
                                 Fx.Assert("DataContract cache overflow");
@@ -290,19 +290,13 @@ namespace System.Runtime.Serialization.Json
                                     _knownDataContracts = new Dictionary<XmlQualifiedName, DataContract>();
                                 }
 
-                                if (!_knownDataContracts.ContainsKey(itemContract.StableName))
-                                {
-                                    _knownDataContracts.Add(itemContract.StableName, itemContract);
-                                }
+                                _knownDataContracts.TryAdd(itemContract.StableName, itemContract);
 
                                 if (collectionDataContract.ItemType.IsGenericType
                                     && collectionDataContract.ItemType.GetGenericTypeDefinition() == typeof(KeyValue<,>))
                                 {
                                     DataContract itemDataContract = DataContract.GetDataContract(Globals.TypeOfKeyValuePair.MakeGenericType(collectionDataContract.ItemType.GenericTypeArguments));
-                                    if (!_knownDataContracts.ContainsKey(itemDataContract.StableName))
-                                    {
-                                        _knownDataContracts.Add(itemDataContract.StableName, itemDataContract);
-                                    }
+                                    _knownDataContracts.TryAdd(itemDataContract.StableName, itemDataContract);
                                 }
 
                                 if (!(itemContract is CollectionDataContract))

@@ -34,7 +34,7 @@ namespace System.Linq.Expressions.Tests
             MethodInfo mi1 = typeof(Expression_Tests).GetMethod("Add");
             ConstantExpression ce1 = Expression.Constant(4, typeof(int));
 
-            Assert.Throws<ArgumentException>("addMethod", () => Expression.ElementInit(mi1, new Expression[] { ce1 }));
+            AssertExtensions.Throws<ArgumentException>("addMethod", () => Expression.ElementInit(mi1, new Expression[] { ce1 }));
         }
 
         public class Atom
@@ -160,7 +160,7 @@ namespace System.Linq.Expressions.Tests
         [Fact]
         public static void ConstantNullWithValueTypeIsInvalid()
         {
-            Assert.Throws<ArgumentException>(null, () => Expression.Constant(null, typeof(int)));
+            AssertExtensions.Throws<ArgumentException>(null, () => Expression.Constant(null, typeof(int)));
         }
 
         [Fact]
@@ -431,13 +431,13 @@ namespace System.Linq.Expressions.Tests
         [Fact]
         public static void TestGetFuncTypeWithNullFails()
         {
-            Assert.Throws<ArgumentNullException>("typeArgs", () => Expression.GetFuncType(null));
+            AssertExtensions.Throws<ArgumentNullException>("typeArgs", () => Expression.GetFuncType(null));
         }
 
         [Fact]
         public static void TestGetFuncTypeWithTooManyArgsFails()
         {
-            Assert.Throws<ArgumentException>("typeArgs", () => Expression.GetFuncType(new Type[] { typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int) }));
+            AssertExtensions.Throws<ArgumentException>("typeArgs", () => Expression.GetFuncType(new Type[] { typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int), typeof(int) }));
         }
 
         [Fact]
@@ -642,7 +642,7 @@ namespace System.Linq.Expressions.Tests
             public override string ToString() { return value.ToString(); }
         }
 
-        [Theory(Skip = "870811")]
+        [Theory]
         [ClassData(typeof(CompilationTypes))]
         public static void TestAndAlso(bool useInterpreter)
         {
@@ -718,7 +718,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(f2().Value.Name, "lhs");
 
             ConstantExpression constant = Expression.Constant(1.0, typeof(double));
-            Assert.Throws<ArgumentException>(null, () => Expression.Lambda<Func<double?>>(constant, null));
+            AssertExtensions.Throws<ArgumentException>(null, () => Expression.Lambda<Func<double?>>(constant, null));
         }
 
         public static int GetBound()
@@ -841,9 +841,10 @@ namespace System.Linq.Expressions.Tests
 
         [Theory]
         [ClassData(typeof(CompilationTypes))]
+        [ActiveIssue("https://github.com/dotnet/corefx/issues/20717 - fails on x64", TargetFrameworkMonikers.UapAot)]
         public static void UnaryPlus(bool useInterpreter)
         {
-            ConstantExpression ce = Expression.Constant((UInt16)10);
+            ConstantExpression ce = Expression.Constant((ushort)10);
 
             UnaryExpression result = Expression.UnaryPlus(ce);
 
@@ -925,7 +926,7 @@ namespace System.Linq.Expressions.Tests
             Expression<Func<bool?>> e6 = Expression.Lambda<Func<bool?>>(
                 Expression.NotEqual(
                     Expression.Constant(n, typeof(int?)),
-                    Expression.Convert(Expression.Constant(null, typeof(Object)), typeof(int?)),
+                    Expression.Convert(Expression.Constant(null, typeof(object)), typeof(int?)),
                     true,
                     null),
                 null);
@@ -966,7 +967,7 @@ namespace System.Linq.Expressions.Tests
             public AnonHelperClass1(Expression<Func<decimal>> mem1) { this.mem1 = mem1; }
         }
 
-        [Theory(Skip = "870811")]
+        [Theory]
         [ClassData(typeof(CompilationTypes))]
         public static void NewExpressionwithMemberAssignInit(bool useInterpreter)
         {
@@ -1530,7 +1531,7 @@ namespace System.Linq.Expressions.Tests
             Func<char> f3 = Expression.Lambda<Func<Char>>(Expression.Convert(Expression.Constant(-1), typeof(char))).Compile(useInterpreter);
             char c3 = f3();
             Func<int> f4 = Expression.Lambda<Func<int>>(Expression.Convert(Expression.Constant(c3), typeof(int))).Compile(useInterpreter);
-            Assert.Equal(UInt16.MaxValue, f4());
+            Assert.Equal(ushort.MaxValue, f4());
         }
 
         [Theory]
@@ -1792,7 +1793,7 @@ namespace System.Linq.Expressions.Tests
         public static void InvokeNonTypedLambdaFails()
         {
             Expression call = Expression.Call(null, typeof(Compiler_Tests).GetMethod("ComputeDynamicLambda", BindingFlags.Static | BindingFlags.Public), new Expression[] { });
-            Assert.Throws<ArgumentException>("expression", () => Expression.Invoke(call, null));
+            AssertExtensions.Throws<ArgumentException>("expression", () => Expression.Invoke(call, null));
         }
 
         public static LambdaExpression ComputeDynamicLambda()
@@ -1804,7 +1805,7 @@ namespace System.Linq.Expressions.Tests
         public static void InvokeNonTypedDelegateFails()
         {
             Expression call = Expression.Call(null, typeof(Compiler_Tests).GetMethod("ComputeDynamicDelegate", BindingFlags.Static | BindingFlags.Public), new Expression[] { });
-            Assert.Throws<ArgumentException>("expression", () => Expression.Invoke(call, null));
+            AssertExtensions.Throws<ArgumentException>("expression", () => Expression.Invoke(call, null));
         }
 
         public static Delegate ComputeDynamicDelegate()
@@ -1833,7 +1834,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(4, d(3, 4));
         }
 
-        [Theory(Skip = "870811")]
+        [Theory]
         [ClassData(typeof(CompilationTypes))]
         public static void CallOnCapturedInstance(bool useInterpreter)
         {
@@ -1899,7 +1900,7 @@ namespace System.Linq.Expressions.Tests
             Assert.Equal(5, v.Length);
         }
 
-        [Theory(Skip = "870811")]
+        [Theory]
         [ClassData(typeof(CompilationTypes))]
         public static void ArrayInitializedWithCapturedInstance(bool useInterpreter)
         {
@@ -2361,7 +2362,7 @@ namespace System.Linq.Expressions.Tests
         public static void ConvertSignedToUnsigned(bool useInterpreter)
         {
             Func<ulong> f = Expression.Lambda<Func<ulong>>(Expression.Convert(Expression.Constant((sbyte)-1), typeof(ulong))).Compile(useInterpreter);
-            Assert.Equal(UInt64.MaxValue, f());
+            Assert.Equal(ulong.MaxValue, f());
         }
 
         [Theory]

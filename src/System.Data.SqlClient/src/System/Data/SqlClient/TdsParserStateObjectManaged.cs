@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
@@ -11,7 +11,7 @@ namespace System.Data.SqlClient.SNI
 {
     internal class TdsParserStateObjectManaged : TdsParserStateObject
     {
-
+        private SNIMarsConnection _marsConnection = null;
         private SNIHandle _sessionHandle = null;              // the SNI handle we're to work on
         private SNIPacket _sniPacket = null;                // Will have to re-vamp this for MARS
         internal SNIPacket _sniAsyncAttnPacket = null;                // Packet to use to send Attn
@@ -29,26 +29,30 @@ namespace System.Data.SqlClient.SNI
 
         internal SNIHandle Handle => _sessionHandle;
 
-        internal override UInt32 Status => _sessionHandle != null ? _sessionHandle.Status : TdsEnums.SNI_UNINITIALIZED;
+        internal override uint Status => _sessionHandle != null ? _sessionHandle.Status : TdsEnums.SNI_UNINITIALIZED;
 
-        internal override object SessionHandle => _sessionHandle;
+        internal override SessionHandle SessionHandle => SessionHandle.FromManagedSession(_sessionHandle);
 
-        protected override object EmptyReadPacket => null;
-
-        protected override bool CheckPacket(object packet, TaskCompletionSource<object> source)
+        protected override bool CheckPacket(PacketHandle packet, TaskCompletionSource<object> source)
         {
-            SNIPacket p = packet as SNIPacket;
-            return p.IsInvalid || (!p.IsInvalid && source != null);
+            SNIPacket p = packet.ManagedPacket;
+            return p.IsInvalid || source != null;
         }
 
         protected override void CreateSessionHandle(TdsParserStateObject physicalConnection, bool async)
         {
             Debug.Assert(physicalConnection is TdsParserStateObjectManaged, "Expected a stateObject of type " + this.GetType());
             TdsParserStateObjectManaged managedSNIObject = physicalConnection as TdsParserStateObjectManaged;
-            _sessionHandle = SNIProxy.Singleton.CreateMarsHandle(this, managedSNIObject.Handle, _outBuff.Length, async);
+
+            _sessionHandle = managedSNIObject.CreateMarsSession(this, async);
         }
 
-        protected override uint SNIPacketGetData(object packet, byte[] _inBuff, ref uint dataSize) => SNIProxy.Singleton.PacketGetData(packet as SNIPacket, _inBuff, ref dataSize);
+        internal SNIMarsHandle CreateMarsSession(object callbackObject, bool async)
+        {
+            return _marsConnection.CreateMarsSession(callbackObject, async);
+        }
+
+        protected override uint SNIPacketGetData(PacketHandle packet, byte[] _inBuff, ref uint dataSize) => SNIProxy.Singleton.PacketGetData(packet.ManagedPacket, _inBuff, ref dataSize);
 
         internal override void CreatePhysicalSNIHandle(string serverName, bool ignoreSniOpenTimeout, long timerExpire, out byte[] instanceName, ref byte[] spnBuffer, bool flushCache, bool async, bool parallel, bool isIntegratedSecurity)
         {
@@ -66,11 +70,11 @@ namespace System.Data.SqlClient.SNI
             }
         }
 
-        internal void ReadAsyncCallback(SNIPacket packet, UInt32 error) => ReadAsyncCallback(IntPtr.Zero, packet, error);
+        internal void ReadAsyncCallback(SNIPacket packet, uint error) => ReadAsyncCallback(IntPtr.Zero, PacketHandle.FromManagedPacket(packet), error);
 
-        internal void WriteAsyncCallback(SNIPacket packet, UInt32 sniError) => WriteAsyncCallback(IntPtr.Zero, packet, sniError);
+        internal void WriteAsyncCallback(SNIPacket packet, uint sniError) => WriteAsyncCallback(IntPtr.Zero, PacketHandle.FromManagedPacket(packet), sniError);
 
-        protected override void RemovePacketFromPendingList(object packet)
+        protected override void RemovePacketFromPendingList(PacketHandle packet)
         {
             // No-Op
         }
@@ -84,10 +88,7 @@ namespace System.Data.SqlClient.SNI
             _sniPacket = null;
             _sessionHandle = null;
             _sniAsyncAttnPacket = null;
-
-            _sniPacket = null;
-            _sessionHandle = null;
-            _sniAsyncAttnPacket = null;
+            _marsConnection = null;
 
             DisposeCounters();
 
@@ -122,30 +123,28 @@ namespace System.Data.SqlClient.SNI
 
         internal override bool IsFailedHandle() => _sessionHandle.Status != TdsEnums.SNI_SUCCESS;
 
-        internal override object ReadSyncOverAsync(int timeoutRemaining, bool isMarsOn, out uint error)
+        internal override PacketHandle ReadSyncOverAsync(int timeoutRemaining, out uint error)
         {
             SNIHandle handle = Handle;
             if (handle == null)
             {
                 throw ADP.ClosedConnectionError();
             }
-            if (isMarsOn)
-            {
-                IncrementPendingCallbacks();
-            }
             SNIPacket packet = null;
             error = SNIProxy.Singleton.ReadSyncOverAsync(handle, out packet, timeoutRemaining);
-            return packet;
+            return PacketHandle.FromManagedPacket(packet);
         }
 
-        internal override bool IsPacketEmpty(object packet)
+        protected override PacketHandle EmptyReadPacket => PacketHandle.FromManagedPacket(null);
+
+        internal override bool IsPacketEmpty(PacketHandle packet)
         {
-            return packet == null;
+            return packet.ManagedPacket == null;
         }
 
-        internal override void ReleasePacket(object syncReadPacket)
+        internal override void ReleasePacket(PacketHandle syncReadPacket)
         {
-            ((SNIPacket)syncReadPacket).Dispose();
+            syncReadPacket.ManagedPacket?.Dispose();
         }
 
         internal override uint CheckConnection()
@@ -154,35 +153,46 @@ namespace System.Data.SqlClient.SNI
             return handle == null ? TdsEnums.SNI_SUCCESS : SNIProxy.Singleton.CheckConnection(handle);
         }
 
-        internal override object ReadAsync(out uint error, ref object handle)
+        internal override PacketHandle ReadAsync(SessionHandle handle, out uint error)
         {
             SNIPacket packet;
-            error = SNIProxy.Singleton.ReadAsync((SNIHandle)handle, out packet);
-            return packet;
+            error = SNIProxy.Singleton.ReadAsync(handle.ManagedHandle, out packet);
+            return PacketHandle.FromManagedPacket(packet);
         }
 
-        internal override object CreateAndSetAttentionPacket()
+        internal override PacketHandle CreateAndSetAttentionPacket()
         {
-            SNIPacket attnPacket = new SNIPacket(Handle);
-            _sniAsyncAttnPacket = attnPacket;
-            SetPacketData(attnPacket, SQL.AttentionHeader, TdsEnums.HEADER_LEN);
-            return attnPacket;
+            if (_sniAsyncAttnPacket == null)
+            {
+                SNIPacket attnPacket = new SNIPacket();
+                SetPacketData(PacketHandle.FromManagedPacket(attnPacket), SQL.AttentionHeader, TdsEnums.HEADER_LEN);
+                _sniAsyncAttnPacket = attnPacket;
+            }
+            return PacketHandle.FromManagedPacket(_sniAsyncAttnPacket);
         }
 
-        internal override uint WritePacket(object packet, bool sync)
+        internal override uint WritePacket(PacketHandle packet, bool sync)
         {
-            return SNIProxy.Singleton.WritePacket((SNIHandle)Handle, (SNIPacket)packet, sync);
+            return SNIProxy.Singleton.WritePacket(Handle, packet.ManagedPacket, sync);
         }
 
-        internal override object AddPacketToPendingList(object packet)
+        internal override PacketHandle AddPacketToPendingList(PacketHandle packet)
         {
             // No-Op
             return packet;
         }
 
-        internal override bool IsValidPacket(object packetPointer) => (SNIPacket)packetPointer != null && !((SNIPacket)packetPointer).IsInvalid;
+        internal override bool IsValidPacket(PacketHandle packet)
+        {
+            Debug.Assert(packet.Type == PacketHandle.ManagedPacketType, "unexpected packet type when requiring ManagedPacket");
+            return (
+                packet.Type == PacketHandle.ManagedPacketType &&
+                packet.ManagedPacket != null &&
+                !packet.ManagedPacket.IsInvalid
+            );
+        }
 
-        internal override object GetResetWritePacket()
+        internal override PacketHandle GetResetWritePacket()
         {
             if (_sniPacket != null)
             {
@@ -195,7 +205,7 @@ namespace System.Data.SqlClient.SNI
                     _sniPacket = _writePacketCache.Take(Handle);
                 }
             }
-            return _sniPacket;
+            return PacketHandle.FromManagedPacket(_sniPacket);
         }
 
         internal override void ClearAllWritePackets()
@@ -212,21 +222,31 @@ namespace System.Data.SqlClient.SNI
             }
         }
 
-        internal override void SetPacketData(object packet, byte[] buffer, int bytesUsed) => SNIProxy.Singleton.PacketSetData((SNIPacket)packet, buffer, bytesUsed);
-        
+        internal override void SetPacketData(PacketHandle packet, byte[] buffer, int bytesUsed) => SNIProxy.Singleton.PacketSetData(packet.ManagedPacket, buffer, bytesUsed);
+
         internal override uint SniGetConnectionId(ref Guid clientConnectionId) => SNIProxy.Singleton.GetConnectionId(Handle, ref clientConnectionId);
 
         internal override uint DisabeSsl() => SNIProxy.Singleton.DisableSsl(Handle);
 
-        internal override uint EnableMars(ref uint info) => SNIProxy.Singleton.EnableMars(Handle);
+        internal override uint EnableMars(ref uint info)
+        {
+            _marsConnection = new SNIMarsConnection(Handle);
+            if (_marsConnection.StartReceive() == TdsEnums.SNI_SUCCESS_IO_PENDING)
+            {
+                return TdsEnums.SNI_SUCCESS;
+            }
+
+            return TdsEnums.SNI_ERROR;
+        }
 
         internal override uint EnableSsl(ref uint info)=>  SNIProxy.Singleton.EnableSsl(Handle, info);
 
         internal override uint SetConnectionBufferSize(ref uint unsignedPacketSize) => SNIProxy.Singleton.SetConnectionBufferSize(Handle, unsignedPacketSize);
 
-        internal override uint GenerateSspiClientContext(byte[] receivedBuff, uint receivedLength, byte[] sendBuff, ref uint sendLength, byte[] _sniSpnBuffer)
+        internal override uint GenerateSspiClientContext(byte[] receivedBuff, uint receivedLength, ref byte[] sendBuff, ref uint sendLength, byte[] _sniSpnBuffer)
         {
             SNIProxy.Singleton.GenSspiClientContext(sspiClientContextStatus, receivedBuff, ref sendBuff, _sniSpnBuffer);
+            sendLength = (uint)(sendBuff != null ? sendBuff.Length : 0);
             return 0;
         }
 
@@ -255,7 +275,7 @@ namespace System.Data.SqlClient.SNI
                 else
                 {
                     // Failed to take a packet - create a new one
-                    packet = new SNIPacket(sniHandle);
+                    packet = new SNIPacket();
                 }
                 return packet;
             }

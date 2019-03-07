@@ -295,7 +295,7 @@ namespace System.Xml.Tests
         public void GetParam12()
         {
             m_xsltArg = new XsltArgumentList();
-            String obj = "0.00";
+            string obj = "0.00";
 
             // string
             m_xsltArg.AddParam("myArg1", szEmpty, obj);
@@ -316,7 +316,7 @@ namespace System.Xml.Tests
             _output.WriteLine("Added Value:{0}\nRetrieved Value:{1}", i, retObj);
             Assert.Equal(retObj.GetType(), i.GetType());
 
-            Boolean bF = (1 == 0);
+            bool bF = (1 == 0);
             m_xsltArg.AddParam("myArg3", szEmpty, bF);
             retObj = m_xsltArg.GetParam("myArg3", szEmpty);
             _output.WriteLine("Added Value:{0}\nRetrieved Value: {1}", bF.ToString(), retObj);
@@ -327,7 +327,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bT = (1 == 1);
+            bool bT = (1 == 1);
             m_xsltArg.AddParam("myArg4", szEmpty, bT);
             retObj = m_xsltArg.GetParam("myArg4", szEmpty);
             _output.WriteLine("Added Value:{0}\nRetrieved Value: {1}", bT.ToString(), retObj);
@@ -380,7 +380,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test" + str);
                 retObj = m_xsltArg.GetParam("myArg" + i, szEmpty);
@@ -392,7 +392,7 @@ namespace System.Xml.Tests
                 i++;
             }
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test"); // dont add whitespace to name here since addparam would throw
                 retObj = m_xsltArg.GetParam("myArg" + str, szEmpty);
@@ -777,7 +777,7 @@ namespace System.Xml.Tests
         public void GetExtObject7()
         {
             m_xsltArg = new XsltArgumentList();
-            String obj = "0.00";
+            string obj = "0.00";
 
             // string
             m_xsltArg.AddExtensionObject("myArg1", obj);
@@ -806,7 +806,7 @@ namespace System.Xml.Tests
             if (i != (int)retObj)
                 Assert.True(false);
 
-            Boolean bF = (1 == 0);
+            bool bF = (1 == 0);
 
             m_xsltArg.AddExtensionObject("myArg3", bF);
             retObj = m_xsltArg.GetExtensionObject("myArg3");
@@ -818,7 +818,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bT = (1 == 1);
+            bool bT = (1 == 1);
 
             m_xsltArg.AddExtensionObject("myArg4", bT);
             retObj = m_xsltArg.GetExtensionObject("myArg4");
@@ -888,7 +888,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 MyObject obj = new MyObject(i, _output);
 
@@ -1420,7 +1420,7 @@ namespace System.Xml.Tests
         {
             string Baseline = Path.Combine("baseline", (string)param);
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 0; i < 200; i++)
             {
@@ -1482,7 +1482,7 @@ namespace System.Xml.Tests
             int errCount = 0;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 try
                 {
@@ -1496,7 +1496,7 @@ namespace System.Xml.Tests
                 i++;
             }
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 try
                 {
@@ -1542,7 +1542,7 @@ namespace System.Xml.Tests
         {
             string Baseline = Path.Combine("baseline", (string)param);
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 1; i < 7; i++)
             {
@@ -1576,7 +1576,7 @@ namespace System.Xml.Tests
         {
             string Baseline = Path.Combine("baseline", (string)param);
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 0; i < 300; i++)
             {
@@ -2719,7 +2719,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
             
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 MyObject obj = new MyObject(i, _output);
                 m_xsltArg.AddExtensionObject(szDefaultNS + str, obj);
@@ -3019,27 +3019,16 @@ namespace System.Xml.Tests
         [InlineData(XslInputType.Navigator, ReaderType.XmlValidatingReader, OutputType.Writer, NavType.XPathDocument)]
         [InlineData(XslInputType.Navigator, ReaderType.XmlValidatingReader, OutputType.TextWriter, NavType.XPathDocument)]
         [Theory]
-        public void AddExtObject25(XslInputType xslInputType, ReaderType readerType, OutputType outputType, NavType navType)
+        public void TC_ExtensionObj_Function_Mismatch_IncorrectCasing(XslInputType xslInputType, ReaderType readerType, OutputType outputType, NavType navType)
         {
             MyObject obj = new MyObject(25, _output);
             m_xsltArg = new XsltArgumentList();
 
             m_xsltArg.AddExtensionObject(szDefaultNS, obj);
-
-            if (LoadXSL("MyObject_CaseSensitive.xsl", xslInputType, readerType) == 1)
-            {
-                try
-                {
-                    Transform_ArgList("fruits.xml", outputType, navType);
-                    CheckResult(419.3031944636, outputType);
-                }
-                catch (System.Xml.Xsl.XsltException)
-                {
-                    return;
-                }
-            }
-            _output.WriteLine("Exception not thrown for wrong-case spelling of methods");
-            Assert.True(false);
+            LoadXSL("MyObject_CaseSensitive.xsl", xslInputType, readerType);
+            var e = Assert.ThrowsAny<XsltException>(() => Transform_ArgList("fruits.xml", outputType, navType));
+            var exceptionSourceAssembly = PlatformDetection.IsFullFramework ? "System.Data.SqlXml" : "System.Xml";
+            CheckExpectedError(e, exceptionSourceAssembly, "XmlIl_NoExtensionMethod", new[] { "urn:my-object", "FN3", "0" });
         }
 
         //[Variation("Object namespace System.Xml.Tests found")]
@@ -3759,7 +3748,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            String obj = "0.00";
+            string obj = "0.00";
 
             // string
             m_xsltArg.AddParam("myArg1", szEmpty, obj);
@@ -3783,7 +3772,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bF = (1 == 0);
+            bool bF = (1 == 0);
             m_xsltArg.AddParam("myArg4", szEmpty, bF);
             m_xsltArg.RemoveParam("myArg4", szEmpty);
             retObj = m_xsltArg.GetParam("myArg4", szEmpty);
@@ -3793,7 +3782,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            Boolean bT = (1 == 1);
+            bool bT = (1 == 1);
             m_xsltArg.AddParam("myArg5", szEmpty, bT);
             m_xsltArg.RemoveParam("myArg5", szEmpty);
             retObj = m_xsltArg.GetParam("myArg5", szEmpty);
@@ -3803,7 +3792,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Int16)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (short)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3812,7 +3801,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (UInt16)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (ushort)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3821,7 +3810,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Int32)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (int)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3830,7 +3819,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (UInt32)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (uint)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3839,7 +3828,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Int64)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (long)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3848,7 +3837,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (UInt64)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (ulong)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3857,7 +3846,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Single)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (float)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3866,7 +3855,7 @@ namespace System.Xml.Tests
                 Assert.True(false);
             }
 
-            m_xsltArg.AddParam("myArg2", szEmpty, (Decimal)i);
+            m_xsltArg.AddParam("myArg2", szEmpty, (decimal)i);
             m_xsltArg.RemoveParam("myArg2", szEmpty);
             retObj = m_xsltArg.GetParam("myArg2", szEmpty);
             if (retObj != null)
@@ -3922,7 +3911,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test" + str);
                 m_xsltArg.RemoveParam("myArg" + i, szEmpty);
@@ -3936,7 +3925,7 @@ namespace System.Xml.Tests
             }
 
             i = 1;
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 m_xsltArg.AddParam("myArg" + i, szEmpty, "Test"); // dont add whitespace to name here since addparam would throw
                 m_xsltArg.RemoveParam("myArg" + str, szEmpty);
@@ -4213,7 +4202,7 @@ namespace System.Xml.Tests
             int i = 1;
             m_xsltArg = new XsltArgumentList();
 
-            foreach (String str in szWhiteSpace)
+            foreach (string str in szWhiteSpace)
             {
                 MyObject obj = new MyObject(i, _output);
 
@@ -4390,7 +4379,7 @@ namespace System.Xml.Tests
         {
             string Baseline = Path.Combine("baseline", (string)param);
             m_xsltArg = new XsltArgumentList();
-            String obj = "Test";
+            string obj = "Test";
 
             for (int i = 0; i < 200; i++)
             {
@@ -4656,6 +4645,7 @@ namespace System.Xml.Tests
             _output = output;
         }
 
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "Full framework does support Compiling JScript/CSharp scripts")]
         //[Variation(id = 1, Desc = "Call Current without MoveNext")]
         [InlineData()]
         [Theory]
@@ -4668,28 +4658,39 @@ namespace System.Xml.Tests
                 XsltArgumentList xslArg = new XsltArgumentList();
                 XmlUrlResolver ur = new XmlUrlResolver();
                 Uri uriSource = ur.ResolveUri(null, FullFilePath("sample.xsd"));
-                xslArg.AddParam("sourceUri", String.Empty, uriSource.ToString());
+                xslArg.AddParam("sourceUri", string.Empty, uriSource.ToString());
 
                 xslt.Load(FullFilePath("xsd2cs1.xsl"), new XsltSettings(true, true), new XmlUrlResolver());
-                XPathDocument doc = new XPathDocument(FullFilePath("sample.xsd"));
-                StringWriter sw = new StringWriter();
-                try
-                {
-                    xslt.Transform(doc, xslArg, sw);
-                    sw.Dispose();
-                    _output.WriteLine("No exception is thrown when .Current is called before .MoveNext on XPathNodeIterator");
-                    Assert.True(false);
-                }
-                catch (System.InvalidOperationException ex)
-                {
-                    _output.WriteLine(ex.ToString());
-                    return;
-                }
             });
 
             Assert.Equal("Compiling JScript/CSharp scripts is not supported", e.InnerException.Message);
         }
 
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework, "Only full framework supports Compiling JScript/CSharp scripts")]
+        //[Variation(id = 1, Desc = "Call Current without MoveNext")]
+        [Fact]
+        public void NodeIter1_FullFramework()
+        {
+            XslCompiledTransform xslt = new XslCompiledTransform();
+
+            XsltArgumentList xslArg = new XsltArgumentList();
+            XmlUrlResolver ur = new XmlUrlResolver();
+            Uri uriSource = ur.ResolveUri(null, FullFilePath("sample.xsd"));
+            xslArg.AddParam("sourceUri", string.Empty, uriSource.ToString());
+
+            xslt.Load(FullFilePath("xsd2cs1.xsl"), new XsltSettings(true, true), new XmlUrlResolver());
+
+            Assert.Throws<System.InvalidOperationException>(() =>
+            {
+                XPathDocument doc = new XPathDocument(FullFilePath("sample.xsd"));
+                using (StringWriter sw = new StringWriter())
+                {
+                    xslt.Transform(doc, xslArg, sw);
+                }
+            });
+        }
+
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "Full framework does support Compiling JScript/CSharp scripts")]
         //[Variation(id = 2, Desc = "Call Current after MoveNext")]
         [InlineData()]
         [Theory]
@@ -4702,18 +4703,33 @@ namespace System.Xml.Tests
                 XsltArgumentList xslArg = new XsltArgumentList();
                 XmlUrlResolver ur = new XmlUrlResolver();
                 Uri uriSource = ur.ResolveUri(null, FullFilePath("sample.xsd"));
-                xslArg.AddParam("sourceUri", String.Empty, uriSource.ToString());
+                xslArg.AddParam("sourceUri", string.Empty, uriSource.ToString());
 
                 xslt.Load(FullFilePath("xsd2cs2.xsl"), new XsltSettings(true, true), new XmlUrlResolver());
-
-                XPathDocument doc = new XPathDocument(FullFilePath("sample.xsd"));
-                StringWriter sw = new StringWriter();
-                xslt.Transform(doc, xslArg, sw);
-                sw.Dispose();
-                return;
             });
 
             Assert.Equal("Compiling JScript/CSharp scripts is not supported", e.InnerException.Message);
+        }
+
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework, "Only full framework supports Compiling JScript/CSharp scripts")]
+        //[Variation(id = 2, Desc = "Call Current after MoveNext")]
+        [Fact]
+        public void NodeIter2_FullFramework()
+        {
+            XslCompiledTransform xslt = new XslCompiledTransform();
+
+            XsltArgumentList xslArg = new XsltArgumentList();
+            XmlUrlResolver ur = new XmlUrlResolver();
+            Uri uriSource = ur.ResolveUri(null, FullFilePath("sample.xsd"));
+            xslArg.AddParam("sourceUri", string.Empty, uriSource.ToString());
+
+            xslt.Load(FullFilePath("xsd2cs2.xsl"), new XsltSettings(true, true), new XmlUrlResolver());
+
+            XPathDocument doc = new XPathDocument(FullFilePath("sample.xsd"));
+            using (StringWriter sw = new StringWriter())
+            {
+                xslt.Transform(doc, xslArg, sw);
+            }
         }
     }
 }

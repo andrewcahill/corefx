@@ -42,10 +42,15 @@ namespace System.ConfigurationTests
             }
         }
 
-        [Theory
-            InlineData(true)
+        private class PersistedSimpleSettings : SimpleSettings
+        {
+        }
+
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsNotNetNativeRunningAsConsoleApp)),
+            InlineData(true),
             InlineData(false)
             ]
+        [ActiveIssue("dotnet/corefx #18832", TargetFrameworkMonikers.NetFramework)]
         public void Context_SimpleSettings_InNotNull(bool isSynchronized)
         {
             SimpleSettings settings = isSynchronized
@@ -55,10 +60,11 @@ namespace System.ConfigurationTests
             Assert.NotNull(settings.Context);
         }
 
-        [Theory
-            InlineData(true)
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsNotNetNativeRunningAsConsoleApp)),
+            InlineData(true),
             InlineData(false)
             ]
+        [ActiveIssue("dotnet/corefx #18832", TargetFrameworkMonikers.NetFramework)]
         public void Providers_SimpleSettings_Empty(bool isSynchronized)
         {
             SimpleSettings settings = isSynchronized
@@ -69,25 +75,27 @@ namespace System.ConfigurationTests
             Assert.NotNull(settings.Providers[typeof(LocalFileSettingsProvider).Name]);
         }
 
-        [Theory
-            InlineData(true)
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsNotNetNativeRunningAsConsoleApp)),
+            InlineData(true),
             InlineData(false)
             ]
+        [ActiveIssue("dotnet/corefx #18832", TargetFrameworkMonikers.NetFramework)]
         public void GetSetStringProperty_SimpleSettings_Ok(bool isSynchronized)
         {
             SimpleSettings settings = isSynchronized 
                 ? (SimpleSettings)SettingsBase.Synchronized(new SimpleSettings()) 
                 : new SimpleSettings();
 
-            Assert.Equal(default(string), settings.StringProperty);
+            Assert.Equal(default, settings.StringProperty);
             settings.StringProperty = "Foo";
             Assert.Equal("Foo", settings.StringProperty);
         }
 
-        [Theory
-            InlineData(true)
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsNotNetNativeRunningAsConsoleApp)),
+            InlineData(true),
             InlineData(false)
             ]
+        [ActiveIssue("dotnet/corefx #18832", TargetFrameworkMonikers.NetFramework)]
         public void GetSetIntProperty_SimpleSettings_Ok(bool isSynchronized)
         {
             SimpleSettings settings = isSynchronized
@@ -99,11 +107,59 @@ namespace System.ConfigurationTests
             Assert.Equal(10, settings.IntProperty);
         }
 
-        [Fact]
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsNotWindowsNanoServer)),
+            InlineData(true),
+            InlineData(false)]
+        [ActiveIssue("dotnet/corefx #18832", TargetFrameworkMonikers.NetFramework)]
+        [ActiveIssue("https://github.com/dotnet/corefx/issues/35668", TestPlatforms.AnyUnix)]
+        public void Save_SimpleSettings_Ok(bool isSynchronized)
+        {
+            PersistedSimpleSettings settings = isSynchronized
+                ? (PersistedSimpleSettings)SettingsBase.Synchronized(new PersistedSimpleSettings())
+                : new PersistedSimpleSettings();
+
+            // Make sure we're clean
+            settings.Reset();
+            settings.Save();
+            Assert.Equal(DefaultIntPropertyValue, settings.IntProperty);
+            Assert.Equal(default, settings.StringProperty);
+
+            // Change settings and save
+            settings.IntProperty = 12;
+            settings.StringProperty = "Bar";
+            Assert.Equal("Bar", settings.StringProperty);
+            Assert.Equal(12, settings.IntProperty);
+            settings.Save();
+
+            // Create a new instance and validate persisted settings
+            settings = isSynchronized
+                            ? (PersistedSimpleSettings)SettingsBase.Synchronized(new PersistedSimpleSettings())
+                            : new PersistedSimpleSettings();
+            Assert.Equal(default, settings.StringProperty); // [ApplicationScopedSetting] isn't persisted
+            Assert.Equal(12, settings.IntProperty);
+
+            // Reset and save
+            settings.Reset();
+            settings.Save();
+            Assert.Equal(DefaultIntPropertyValue, settings.IntProperty);
+            Assert.Equal(default, settings.StringProperty);
+
+            // Create a new instance and validate persisted settings
+            settings = isSynchronized
+                            ? (PersistedSimpleSettings)SettingsBase.Synchronized(new PersistedSimpleSettings())
+                            : new PersistedSimpleSettings();
+            Assert.Equal(default, settings.StringProperty); // [ApplicationScopedSetting] isn't persisted
+            Assert.Equal(DefaultIntPropertyValue, settings.IntProperty);
+        }
+
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsNotNetNativeRunningAsConsoleApp))]
+        [ActiveIssue("dotnet/corefx #18832", TargetFrameworkMonikers.NetFramework)]
         public void Reload_SimpleSettings_Ok()
         {
-            var settings = new SimpleSettings();
-            settings.IntProperty = 10;
+            var settings = new SimpleSettings
+            {
+                IntProperty = 10
+            };
 
             Assert.NotEqual(DefaultIntPropertyValue, settings.IntProperty);
             settings.Reload();
@@ -135,7 +191,8 @@ namespace System.ConfigurationTests
         {
         }
 
-        [Fact]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsNotNetNativeRunningAsConsoleApp))]
+        [ActiveIssue("dotnet/corefx #18832", TargetFrameworkMonikers.NetFramework)]
         public void SettingsProperty_SettingsWithAttributes_Ok()
         {
             SettingsWithAttributes settings = new SettingsWithAttributes();

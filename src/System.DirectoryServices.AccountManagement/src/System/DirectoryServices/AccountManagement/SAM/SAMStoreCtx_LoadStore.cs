@@ -52,7 +52,7 @@ namespace System.DirectoryServices.AccountManagement
                     else
                     {
                         throw new InvalidOperationException(
-                                        String.Format(CultureInfo.CurrentCulture, StringResources.StoreCtxUnsupportedPrincipalTypeForSave, principalType.ToString()));
+                                        SR.Format(SR.StoreCtxUnsupportedPrincipalTypeForSave, principalType));
                     }
 
                     // Determine the SAM account name for the entry we'll be creating.  Use the name from the NT4 IdentityClaim.
@@ -61,7 +61,7 @@ namespace System.DirectoryServices.AccountManagement
                     if (samAccountName == null)
                     {
                         // They didn't set a NT4 IdentityClaim.
-                        throw new InvalidOperationException(StringResources.NameMustBeSetToPersistPrincipal);
+                        throw new InvalidOperationException(SR.NameMustBeSetToPersistPrincipal);
                     }
 
                     lock (_ctxBaseLock)
@@ -207,7 +207,7 @@ namespace System.DirectoryServices.AccountManagement
 
             GlobalDebug.WriteLineIf(GlobalDebug.Info, "SAMStoreCtx", "GetAsPrincipal: using path={0}", de.Path);
 
-            // Construct a appropriate Principal object.
+            // Construct an appropriate Principal object.
             Principal p = SDSUtils.DirectoryEntryToPrincipal(de, this.OwningContext, null);
             Debug.Assert(p != null);
 
@@ -345,7 +345,7 @@ namespace System.DirectoryServices.AccountManagement
                 sidObj.GetBinaryForm(sid, 0);
 
                 if (sid == null)
-                    throw new ArgumentException(StringResources.StoreCtxSecurityIdentityClaimBadFormat);
+                    throw new ArgumentException(SR.StoreCtxSecurityIdentityClaimBadFormat);
 
                 // If they're searching by SID for a SID corresponding to a fake group, construct
                 // and return the fake group
@@ -462,7 +462,7 @@ namespace System.DirectoryServices.AccountManagement
                 // If they both succeeded in finding a match, we have too many matches.
                 // Throw an exception.
                 if ((sidPrincipal != null) && (nt4Principal != null))
-                    throw new MultipleMatchesException(StringResources.MultipleMatchingPrincipals);
+                    throw new MultipleMatchesException(SR.MultipleMatchingPrincipals);
 
                 // Return whichever one matched.  If neither matched, this will return null.
                 return (sidPrincipal != null) ? GetAsPrincipal(sidPrincipal, null) :
@@ -472,7 +472,7 @@ namespace System.DirectoryServices.AccountManagement
             else
             {
                 // Unsupported type of IdentityClaim
-                throw new ArgumentException(StringResources.StoreCtxUnsupportedIdentityClaimForQuery);
+                throw new ArgumentException(SR.StoreCtxUnsupportedIdentityClaimForQuery);
             }
         }
 
@@ -512,7 +512,7 @@ namespace System.DirectoryServices.AccountManagement
             }
 
             // Valid SID, but not for our context (machine).  No match.
-            if (String.Compare(domainName, this.MachineFlatName, StringComparison.OrdinalIgnoreCase) != 0)
+            if (!string.Equals(domainName, this.MachineFlatName, StringComparison.OrdinalIgnoreCase))
             {
                 GlobalDebug.WriteLineIf(GlobalDebug.Warn, "SAMStoreCtx", "FindNativeBySIDIdentRef: {0} != {1}, no match", domainName, this.MachineFlatName);
                 return null;
@@ -533,7 +533,7 @@ namespace System.DirectoryServices.AccountManagement
             int index = urnValue.IndexOf('\\');
 
             if (index == urnValue.Length - 1)
-                throw new ArgumentException(StringResources.StoreCtxNT4IdentityClaimWrongForm);
+                throw new ArgumentException(SR.StoreCtxNT4IdentityClaimWrongForm);
 
             string samAccountName = (index != -1) ? urnValue.Substring(index + 1) :    // +1 to skip the '/'
                                                      urnValue;
@@ -864,7 +864,7 @@ namespace System.DirectoryServices.AccountManagement
             {
                 // We're intended to handle single-valued scalar properties
                 Debug.Assert(values.Count == 1);
-                Debug.Assert(values[0] is Int32);
+                Debug.Assert(values[0] is int);
 
                 int secondsLapsed = (int)values[0];
 
@@ -892,7 +892,7 @@ namespace System.DirectoryServices.AccountManagement
 
         private static void UserFlagsFromWinNTConverter(DirectoryEntry de, string suggestedWinNTProperty, Principal p, string propertyName)
         {
-            Debug.Assert(String.Compare(suggestedWinNTProperty, "UserFlags", StringComparison.OrdinalIgnoreCase) == 0);
+            Debug.Assert(string.Equals(suggestedWinNTProperty, "UserFlags", StringComparison.OrdinalIgnoreCase));
 
             SDSUtils.AccountControlFromDirectoryEntry(new dSPropertyCollection(de.Properties), suggestedWinNTProperty, p, propertyName, true);
         }
@@ -904,10 +904,9 @@ namespace System.DirectoryServices.AccountManagement
         private static void ExceptionToWinNTConverter(Principal p, string propertyName, DirectoryEntry de, string suggestedWinNTProperty, bool isLSAM)
         {
             throw new InvalidOperationException(
-                            String.Format(CultureInfo.CurrentCulture,
-                                          StringResources.PrincipalUnsupportPropertyForType,
-                                          p.GetType().ToString(),
-                                          PropertyNamesExternal.GetExternalForm(propertyName)));
+                            SR.Format(SR.PrincipalUnsupportPropertyForType,
+                                      p.GetType(),
+                                      PropertyNamesExternal.GetExternalForm(propertyName)));
         }
 
         private static void StringToWinNTConverter(Principal p, string propertyName, DirectoryEntry de, string suggestedWinNTProperty, bool isLSAM)
@@ -957,9 +956,7 @@ namespace System.DirectoryServices.AccountManagement
         {
             if (!isLSAM)
                 throw new InvalidOperationException(
-                    String.Format(CultureInfo.CurrentCulture,
-                                  StringResources.PrincipalUnsupportPropertyForPlatform,
-                                  PropertyNamesExternal.GetExternalForm(propertyName)));
+                    SR.Format(SR.PrincipalUnsupportPropertyForPlatform, PropertyNamesExternal.GetExternalForm(propertyName)));
         }
 
         private static void GroupTypeToWinNTConverter(Principal p, string propertyName, DirectoryEntry de, string suggestedWinNTProperty, bool isLSAM)
@@ -968,9 +965,7 @@ namespace System.DirectoryServices.AccountManagement
             {
                 if (!isLSAM)
                     throw new InvalidOperationException(
-                        String.Format(CultureInfo.CurrentCulture,
-                                      StringResources.PrincipalUnsupportPropertyForPlatform,
-                                      PropertyNamesExternal.GetExternalForm(propertyName)));
+                        SR.Format(SR.PrincipalUnsupportPropertyForPlatform, PropertyNamesExternal.GetExternalForm(propertyName)));
             }
             else
             {
@@ -980,7 +975,7 @@ namespace System.DirectoryServices.AccountManagement
                 GroupScope value = (GroupScope)p.GetValueForProperty(propertyName);
 
                 if (value != GroupScope.Local)
-                    throw new InvalidOperationException(StringResources.SAMStoreCtxLocalGroupsOnly);
+                    throw new InvalidOperationException(SR.SAMStoreCtxLocalGroupsOnly);
             }
         }
 
@@ -988,9 +983,7 @@ namespace System.DirectoryServices.AccountManagement
         {
             if (!isLSAM)
                 throw new InvalidOperationException(
-                    String.Format(CultureInfo.CurrentCulture,
-                                  StringResources.PrincipalUnsupportPropertyForPlatform,
-                                  PropertyNamesExternal.GetExternalForm(propertyName)));
+                    SR.Format(SR.PrincipalUnsupportPropertyForPlatform, PropertyNamesExternal.GetExternalForm(propertyName)));
         }
 
         private static void AcctExpirDateToNTConverter(Principal p, string propertyName, DirectoryEntry de, string suggestedWinNTProperty, bool isLSAM)
@@ -1009,7 +1002,7 @@ namespace System.DirectoryServices.AccountManagement
 
         private static void UserFlagsToWinNTConverter(Principal p, string propertyName, DirectoryEntry de, string suggestedWinNTProperty, bool isLSAM)
         {
-            Debug.Assert(String.Compare(suggestedWinNTProperty, "UserFlags", StringComparison.OrdinalIgnoreCase) == 0);
+            Debug.Assert(string.Equals(suggestedWinNTProperty, "UserFlags", StringComparison.OrdinalIgnoreCase));
 
             SDSUtils.AccountControlToDirectoryEntry(p, propertyName, de, suggestedWinNTProperty, true, p.unpersisted);
         }
@@ -1063,9 +1056,8 @@ namespace System.DirectoryServices.AccountManagement
                         GlobalDebug.WriteLineIf(GlobalDebug.Warn, "SAMStoreCtx", "UpdateGroupMembership: error while clearing, hr={0}", hr);
 
                         throw new PrincipalOperationException(
-                                        String.Format(
-                                                CultureInfo.CurrentCulture,
-                                                StringResources.SAMStoreCtxFailedToClearGroup,
+                                        SR.Format(
+                                                SR.SAMStoreCtxFailedToClearGroup,
                                                 hr.ToString(CultureInfo.InvariantCulture)));
                     }
                 }
@@ -1085,12 +1077,12 @@ namespace System.DirectoryServices.AccountManagement
                          (memberType != typeof(GroupPrincipal)) && (!memberType.IsSubclassOf(typeof(GroupPrincipal))))
                     {
                         throw new InvalidOperationException(
-                                        String.Format(CultureInfo.CurrentCulture, StringResources.StoreCtxUnsupportedPrincipalTypeForGroupInsert, memberType.ToString()));
+                                        SR.Format(SR.StoreCtxUnsupportedPrincipalTypeForGroupInsert, memberType));
                     }
 
                     // Can't inserted unpersisted principal
                     if (member.unpersisted)
-                        throw new InvalidOperationException(StringResources.StoreCtxGroupHasUnpersistedInsertedPrincipal);
+                        throw new InvalidOperationException(SR.StoreCtxGroupHasUnpersistedInsertedPrincipal);
 
                     Debug.Assert(member.Context != null);
 
@@ -1107,7 +1099,7 @@ namespace System.DirectoryServices.AccountManagement
                     string memberSidPath = GetSidADsPathFromPrincipal(member);
 
                     if (memberSidPath == null)
-                        throw new InvalidOperationException(StringResources.SAMStoreCtxCouldntGetSIDForGroupMember);
+                        throw new InvalidOperationException(SR.SAMStoreCtxCouldntGetSIDForGroupMember);
 
                     GlobalDebug.WriteLineIf(GlobalDebug.Info, "SAMStoreCtx", "UpdateGroupMembership: inserting {0}", memberSidPath);
 
@@ -1135,7 +1127,7 @@ namespace System.DirectoryServices.AccountManagement
                     string memberSidPath = GetSidADsPathFromPrincipal(member);
 
                     if (memberSidPath == null)
-                        throw new InvalidOperationException(StringResources.SAMStoreCtxCouldntGetSIDForGroupMember);
+                        throw new InvalidOperationException(SR.SAMStoreCtxCouldntGetSIDForGroupMember);
 
                     GlobalDebug.WriteLineIf(GlobalDebug.Info, "SAMStoreCtx", "UpdateGroupMembership: removing {0}", memberSidPath);
 

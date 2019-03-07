@@ -13,7 +13,7 @@ namespace System.Linq
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             if (count <= 0)
@@ -27,34 +27,24 @@ namespace System.Linq
 
                 count = 0;
             }
-            else
+            else if (source is IPartition<TSource> partition)
             {
-                IPartition<TSource> partition = source as IPartition<TSource>;
-                if (partition != null)
-                {
-                    return partition.Skip(count);
-                }
+                return partition.Skip(count);
             }
 
-            IList<TSource> sourceList = source as IList<TSource>;
-            if (sourceList != null)
-            {
-                return new ListPartition<TSource>(sourceList, count, int.MaxValue);
-            }
-
-            return new EnumerablePartition<TSource>(source, count, -1);
+            return SkipIterator(source, count);
         }
 
         public static IEnumerable<TSource> SkipWhile<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate)
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             if (predicate == null)
             {
-                throw Error.ArgumentNull(nameof(predicate));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.predicate);
             }
 
             return SkipWhileIterator(source, predicate);
@@ -85,12 +75,12 @@ namespace System.Linq
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             if (predicate == null)
             {
-                throw Error.ArgumentNull(nameof(predicate));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.predicate);
             }
 
             return SkipWhileIterator(source, predicate);
@@ -127,7 +117,7 @@ namespace System.Linq
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             if (count <= 0)

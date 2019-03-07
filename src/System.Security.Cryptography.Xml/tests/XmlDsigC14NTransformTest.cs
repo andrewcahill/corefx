@@ -1,3 +1,5 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// See the LICENSE file in the project root for more information
 //
 // XmlDsigC14NTransformTest.cs - Test Cases for XmlDsigC14NTransform
 //
@@ -140,7 +142,7 @@ namespace System.Security.Cryptography.Xml.Tests
         {
             XmlDsigC14NTransform transform = new XmlDsigC14NTransform();
             byte[] bad = { 0xBA, 0xD };
-            Assert.Throws<ArgumentException>(() => transform.LoadInput(bad));
+            AssertExtensions.Throws<ArgumentException>("obj", () => transform.LoadInput(bad));
         }
 
         [Fact]
@@ -148,7 +150,7 @@ namespace System.Security.Cryptography.Xml.Tests
         {
             XmlDsigC14NTransform transform = new XmlDsigC14NTransform();
             XmlDocument doc = new XmlDocument();
-            Assert.Throws<ArgumentException>(() => transform.GetOutput(doc.GetType()));
+            AssertExtensions.Throws<ArgumentException>("type", () => transform.GetOutput(doc.GetType()));
         }
 
         [Fact]
@@ -379,33 +381,12 @@ namespace System.Security.Cryptography.Xml.Tests
             XmlDocument doc = new XmlDocument();
             doc.AppendChild(doc.CreateElement("foo", "urn:foo"));
             doc.DocumentElement.AppendChild(doc.CreateElement("bar", "urn:bar"));
-            Assert.Equal(String.Empty, doc.DocumentElement.GetAttribute("xmlns"));
+            Assert.Equal(string.Empty, doc.DocumentElement.GetAttribute("xmlns"));
             XmlDsigC14NTransform t = new XmlDsigC14NTransform();
             t.LoadInput(doc);
             Stream s = t.GetOutput() as Stream;
             Assert.Equal(new StreamReader(s, Encoding.UTF8).ReadToEnd(), "<foo xmlns=\"urn:foo\"><bar xmlns=\"urn:bar\"></bar></foo>");
             Assert.Equal("urn:foo", doc.DocumentElement.GetAttribute("xmlns"));
-        }
-
-        [Fact(Skip = "https://github.com/dotnet/corefx/issues/16798")]
-        public void PropagatedNamespaces()
-        {
-            XmlDocument doc = new XmlDocument();
-            doc.AppendChild(doc.CreateElement("foo", "urn:foo"));
-            doc.DocumentElement.AppendChild(doc.CreateElement("bar", "urn:bar"));
-            Assert.Equal(String.Empty, doc.DocumentElement.GetAttribute("xmlns:f"));
-            XmlDsigExcC14NTransform t = new XmlDsigExcC14NTransform();
-            t.LoadInput(doc);
-            t.PropagatedNamespaces.Add("f", "urn:foo");
-            t.PropagatedNamespaces.Add("b", "urn:bar");
-            using (Stream s = t.GetOutput() as Stream)
-            using (StreamReader streamReader = new StreamReader(s, Encoding.UTF8))
-            {
-                string result = streamReader.ReadToEnd();
-                Assert.Equal(result,
-                    "<foo xmlns=\"urn:foo\"><bar xmlns=\"urn:bar\"></bar></foo>");
-                Assert.Equal("urn:foo", doc.DocumentElement.NamespaceURI);
-            }
         }
 
         [Fact]

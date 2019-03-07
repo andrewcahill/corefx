@@ -3,87 +3,47 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-
 using Xunit;
 using Xunit.Abstractions;
 
 namespace System.Net.Sockets.Tests
 {
-    public abstract class SendReceive : MemberDatas
+    public abstract class SendReceive<T> : SocketTestHelperBase<T> where T : SocketHelperBase, new()
     {
-        private readonly ITestOutputHelper _log;
+        public SendReceive(ITestOutputHelper output) : base(output) {}
 
-        public SendReceive(ITestOutputHelper output)
+        [Theory]
+        [InlineData(null, 0, 0)] // null array
+        [InlineData(1, -1, 0)] // offset low
+        [InlineData(1, 2, 0)] // offset high
+        [InlineData(1, 0, -1)] // count low
+        [InlineData(1, 1, 2)] // count high
+        public async Task InvalidArguments_Throws(int? length, int offset, int count)
         {
-            _log = output;
-        }
-
-        public abstract Task<Socket> AcceptAsync(Socket s);
-        public abstract Task ConnectAsync(Socket s, EndPoint endPoint);
-        public abstract Task<int> ReceiveAsync(Socket s, ArraySegment<byte> buffer);
-        public abstract Task<SocketReceiveFromResult> ReceiveFromAsync(
-            Socket s, ArraySegment<byte> buffer, EndPoint endPoint);
-        public abstract Task<int> ReceiveAsync(Socket s, IList<ArraySegment<byte>> bufferList);
-        public abstract Task<int> SendAsync(Socket s, ArraySegment<byte> buffer);
-        public abstract Task<int> SendAsync(Socket s, IList<ArraySegment<byte>> bufferList);
-        public abstract Task<int> SendToAsync(Socket s, ArraySegment<byte> buffer, EndPoint endpoint);
-        public virtual bool GuaranteedSendOrdering => true;
-        public virtual bool ValidatesArrayArguments => true;
-        public virtual bool SupportsNonBlocking => true;
-
-        [ActiveIssue(16715, TestPlatforms.AnyUnix)] // invalid array segments in buffer lists not handled properly
-        [Fact]
-        public async Task InvalidArguments_Throws()
-        {
-            var nullArray = new FakeArraySegment { Array = null, Offset = 0, Count = 0 }.ToActual();
-            var offsetLow = new FakeArraySegment { Array = new byte[1], Offset = -1, Count = 0 }.ToActual();
-            var offsetHigh = new FakeArraySegment { Array = new byte[1], Offset = 2, Count = 0 }.ToActual();
-            var countLow = new FakeArraySegment { Array = new byte[1], Offset = 0, Count = -1 }.ToActual();
-            var countHigh = new FakeArraySegment { Array = new byte[1], Offset = 1, Count = 2 }.ToActual();
+            if (!ValidatesArrayArguments) return;
 
             using (Socket s = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
             {
-                if (ValidatesArrayArguments)
-                {
-                    await Assert.ThrowsAsync<ArgumentNullException>(() => ReceiveAsync(s, nullArray));
-                }
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, offsetLow));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, offsetHigh));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, countLow));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, countHigh));
-                
-                if (ValidatesArrayArguments)
-                {
-                    await Assert.ThrowsAsync<ArgumentNullException>(() => ReceiveAsync(s, new List<ArraySegment<byte>> { nullArray }));
-                }
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, new List<ArraySegment<byte>> { offsetLow }));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, new List<ArraySegment<byte>> { offsetHigh }));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, new List<ArraySegment<byte>> { countLow }));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => ReceiveAsync(s, new List<ArraySegment<byte>> { countHigh }));
+                Type expectedExceptionType = length == null ? typeof(ArgumentNullException) : typeof(ArgumentOutOfRangeException);
 
-                if (ValidatesArrayArguments)
-                {
-                    await Assert.ThrowsAsync<ArgumentNullException>(() => SendAsync(s, nullArray));
-                }
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, offsetLow));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, offsetHigh));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, countLow));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, countHigh));
+                var validBuffer = new ArraySegment<byte>(new byte[1]);
+                var invalidBuffer = new FakeArraySegment { Array = length != null ? new byte[length.Value] : null, Offset = offset, Count = count }.ToActual();
 
-                if (ValidatesArrayArguments)
-                {
-                    await Assert.ThrowsAsync<ArgumentNullException>(() => SendAsync(s, new List<ArraySegment<byte>> { nullArray }));
-                }
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, new List<ArraySegment<byte>> { offsetLow }));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, new List<ArraySegment<byte>> { offsetHigh }));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, new List<ArraySegment<byte>> { countLow }));
-                await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => SendAsync(s, new List<ArraySegment<byte>> { countHigh }));
+                await Assert.ThrowsAsync(expectedExceptionType, () => ReceiveAsync(s, invalidBuffer));
+                await Assert.ThrowsAsync(expectedExceptionType, () => ReceiveAsync(s, new List<ArraySegment<byte>> { invalidBuffer }));
+                await Assert.ThrowsAsync(expectedExceptionType, () => ReceiveAsync(s, new List<ArraySegment<byte>> { validBuffer, invalidBuffer }));
+
+                await Assert.ThrowsAsync(expectedExceptionType, () => SendAsync(s, invalidBuffer));
+                await Assert.ThrowsAsync(expectedExceptionType, () => SendAsync(s, new List<ArraySegment<byte>> { invalidBuffer }));
+                await Assert.ThrowsAsync(expectedExceptionType, () => SendAsync(s, new List<ArraySegment<byte>> { validBuffer, invalidBuffer }));
             }
         }
 
+        [ActiveIssue(16945)] // Packet loss, potentially due to other tests running at the same time
         [OuterLoop] // TODO: Issue #11345
         [Theory]
         [MemberData(nameof(Loopbacks))]
@@ -182,7 +142,7 @@ namespace System.Net.Sockets.Tests
                         if (!useMultipleBuffers)
                         {
                             var recvBuffer = new byte[256];
-                            for (;;)
+                            for (; ; )
                             {
                                 int received = await ReceiveAsync(remote, new ArraySegment<byte>(recvBuffer));
                                 if (received == 0)
@@ -201,7 +161,7 @@ namespace System.Net.Sockets.Tests
                                 new ArraySegment<byte>(new byte[256], 2, 100),
                                 new ArraySegment<byte>(new byte[1], 0, 0),
                                 new ArraySegment<byte>(new byte[64], 9, 33)};
-                            for (;;)
+                            for (; ; )
                             {
                                 int received = await ReceiveAsync(remote, recvBuffers);
                                 if (received == 0)
@@ -274,6 +234,57 @@ namespace System.Net.Sockets.Tests
 
                 Assert.Equal(bytesSent, bytesReceived);
                 Assert.Equal(sentChecksum.Sum, receivedChecksum.Sum);
+            }
+        }
+
+        [OuterLoop] // TODO: Issue #11345
+        [Theory]
+        [MemberData(nameof(Loopbacks))]
+        public async Task SendRecv_Stream_TCP_LargeMultiBufferSends(IPAddress listenAt)
+        {
+            using (var listener = new Socket(listenAt.AddressFamily, SocketType.Stream, ProtocolType.Tcp))
+            using (var client = new Socket(listenAt.AddressFamily, SocketType.Stream, ProtocolType.Tcp))
+            {
+                listener.BindToAnonymousPort(listenAt);
+                listener.Listen(1);
+
+                Task<Socket> acceptTask = AcceptAsync(listener);
+                await client.ConnectAsync(listener.LocalEndPoint);
+                using (Socket server = await acceptTask)
+                {
+                    var sentChecksum = new Fletcher32();
+                    var rand = new Random();
+                    int bytesToSend = 0;
+                    var buffers = new List<ArraySegment<byte>>();
+                    const int NumBuffers = 5;
+                    for (int i = 0; i < NumBuffers; i++)
+                    {
+                        var sendBuffer = new byte[12345678];
+                        rand.NextBytes(sendBuffer);
+                        bytesToSend += sendBuffer.Length - i; // trim off a few bytes to test offset/count
+                        sentChecksum.Add(sendBuffer, i, sendBuffer.Length - i);
+                        buffers.Add(new ArraySegment<byte>(sendBuffer, i, sendBuffer.Length - i));
+                    }
+
+                    Task<int> sendTask = SendAsync(client, buffers);
+
+                    var receivedChecksum = new Fletcher32();
+                    int bytesReceived = 0;
+                    byte[] recvBuffer = new byte[1024];
+                    while (bytesReceived < bytesToSend)
+                    {
+                        int received = await ReceiveAsync(server, new ArraySegment<byte>(recvBuffer));
+                        if (received <= 0)
+                        {
+                            break;
+                        }
+                        bytesReceived += received;
+                        receivedChecksum.Add(recvBuffer, 0, received);
+                    }
+
+                    Assert.Equal(bytesToSend, await sendTask);
+                    Assert.Equal(sentChecksum.Sum, receivedChecksum.Sum);
+                }
             }
         }
 
@@ -547,7 +558,7 @@ namespace System.Net.Sockets.Tests
         [OuterLoop] // TODO: Issue #11345
         [Theory]
         [MemberData(nameof(LoopbacksAndBuffers))]
-        public void SendRecvPollSync_TcpListener_Socket(IPAddress listenAt, bool pollBeforeOperation)
+        public async Task SendRecvPollSync_TcpListener_Socket(IPAddress listenAt, bool pollBeforeOperation)
         {
             const int BytesToSend = 123456;
             const int ListenBacklog = 1;
@@ -559,11 +570,15 @@ namespace System.Net.Sockets.Tests
             {
                 int bytesReceived = 0;
                 var receivedChecksum = new Fletcher32();
+
+                _output?.WriteLine($"{DateTime.Now} Starting listener at {listener.LocalEndpoint}");
                 Task serverTask = Task.Run(async () =>
                 {
                     using (Socket remote = await listener.AcceptSocketAsync())
                     {
                         var recvBuffer = new byte[256];
+                        int count = 0;
+
                         while (true)
                         {
                             if (pollBeforeOperation)
@@ -571,9 +586,11 @@ namespace System.Net.Sockets.Tests
                                 Assert.True(remote.Poll(-1, SelectMode.SelectRead), "Read poll before completion should have succeeded");
                             }
                             int received = remote.Receive(recvBuffer, 0, recvBuffer.Length, SocketFlags.None);
+                            count++;
                             if (received == 0)
                             {
                                 Assert.True(remote.Poll(0, SelectMode.SelectRead), "Read poll after completion should have succeeded");
+                                _output?.WriteLine($"{DateTime.Now} Received 0 bytes. Stopping receiving loop after {count} iterations.");
                                 break;
                             }
 
@@ -613,10 +630,17 @@ namespace System.Net.Sockets.Tests
                             bytesSent += sent;
                             sentChecksum.Add(sendBuffer, 0, sent);
                         }
+
+                        client.Shutdown(SocketShutdown.Send);
                     }
                 });
 
-                Assert.True(Task.WaitAll(new[] { serverTask, clientTask }, TestTimeout), "Wait timed out");
+                await (new[] { serverTask, clientTask }).WhenAllOrAnyFailed(TestTimeout);
+
+                if (bytesSent != bytesReceived)
+                {
+                    _output?.WriteLine($"{DateTime.Now} Test received only {bytesReceived} bytes from {bytesSent}. Client task is {clientTask.Status}, Server task is {serverTask.Status}");
+                }
 
                 Assert.Equal(bytesSent, bytesReceived);
                 Assert.Equal(sentChecksum.Sum, receivedChecksum.Sum);
@@ -627,7 +651,6 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        [ActiveIssue(13778, TestPlatforms.OSX)]
         [Fact]
         public async Task SendRecv_0ByteReceive_Success()
         {
@@ -657,12 +680,46 @@ namespace System.Net.Sockets.Tests
 
                         // The client should now wake up, getting 0 bytes with 1 byte available.
                         Assert.Equal(0, await receive);
-                        Assert.Equal(1, client.Available); // Due to #13778, this sometimes fails on macOS
+                        Assert.Equal(1, client.Available);
 
-                        // Receive that byte
+                        // We should be able to do another 0-byte receive that completes immediateliy
+                        Assert.Equal(0, await ReceiveAsync(client, new ArraySegment<byte>(new byte[1], 0, 0)));
+                        Assert.Equal(1, client.Available);
+
+                        // Then receive the byte
                         Assert.Equal(1, await ReceiveAsync(client, new ArraySegment<byte>(new byte[1])));
                         Assert.Equal(0, client.Available);
                     }
+                }
+            }
+        }
+
+        [Fact]
+        public async Task Receive0ByteReturns_WhenPeerDisconnects()
+        {
+            using (Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            using (Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+                listener.Listen(1);
+
+                Task<Socket> acceptTask = AcceptAsync(listener);
+                await Task.WhenAll(
+                    acceptTask,
+                    ConnectAsync(client, new IPEndPoint(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndPoint).Port)));
+
+                using (Socket server = await acceptTask)
+                {
+                    // Have the client do a 0-byte receive.  No data is available, so this should pend.
+                    Task<int> receive = ReceiveAsync(client, new ArraySegment<byte>(Array.Empty<byte>()));
+                    Assert.False(receive.IsCompleted, $"Task should not have been completed, was {receive.Status}");
+
+                    // Disconnect the client
+                    server.Shutdown(SocketShutdown.Both);
+                    server.Close();
+
+                    // The client should now wake up
+                    Assert.Equal(0, await receive);
                 }
             }
         }
@@ -672,7 +729,7 @@ namespace System.Net.Sockets.Tests
         [InlineData(true, 1)]
         public async Task SendRecv_BlockingNonBlocking_LingerTimeout_Success(bool blocking, int lingerTimeout)
         {
-            if (!SupportsNonBlocking) return;
+            if (UsesSync) return;
 
             using (Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
             using (Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
@@ -703,11 +760,11 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        [ActiveIssue(16716, TestPlatforms.OSX)] // SendBufferSize = 0 throws
         [Fact]
+        [PlatformSpecific(~TestPlatforms.OSX)] // SendBufferSize, ReceiveBufferSize = 0 not supported on OSX.
         public async Task SendRecv_NoBuffering_Success()
         {
-            if (!SupportsNonBlocking) return;
+            if (UsesSync) return;
 
             using (Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
             using (Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
@@ -725,9 +782,8 @@ namespace System.Net.Sockets.Tests
                     client.SendBufferSize = 0;
                     server.ReceiveBufferSize = 0;
 
-                    var sendBuffer = new byte[5000000];
+                    var sendBuffer = new byte[10000];
                     Task sendTask = SendAsync(client, new ArraySegment<byte>(sendBuffer));
-                    Assert.False(sendTask.IsCompleted);
 
                     int totalReceived = 0;
                     var receiveBuffer = new ArraySegment<byte>(new byte[4096]);
@@ -742,6 +798,428 @@ namespace System.Net.Sockets.Tests
                 }
             }
         }
+
+        [OuterLoop] // TODO: Issue #11345
+        [Fact]
+        public async Task SendRecv_DisposeDuringPendingReceive_ThrowsSocketException()
+        {
+            if (UsesSync) return; // if sync, can't guarantee call will have been initiated by time of disposal
+
+            using (Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            using (Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+                listener.Listen(1);
+
+                Task<Socket> acceptTask = AcceptAsync(listener);
+                await Task.WhenAll(
+                    acceptTask,
+                    ConnectAsync(client, new IPEndPoint(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndPoint).Port)));
+
+                using (Socket server = await acceptTask)
+                {
+                    Task receiveTask = ReceiveAsync(client, new ArraySegment<byte>(new byte[1]));
+                    Assert.False(receiveTask.IsCompleted, "Receive should be pending");
+
+                    client.Dispose();
+
+                    if (DisposeDuringOperationResultsInDisposedException)
+                    {
+                        await Assert.ThrowsAsync<ObjectDisposedException>(() => receiveTask);
+                    }
+                    else
+                    {
+                        var se = await Assert.ThrowsAsync<SocketException>(() => receiveTask);
+                        Assert.True(
+                            se.SocketErrorCode == SocketError.OperationAborted || se.SocketErrorCode == SocketError.ConnectionAborted,
+                            $"Expected {nameof(SocketError.OperationAborted)} or {nameof(SocketError.ConnectionAborted)}, got {se.SocketErrorCode}");
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        [PlatformSpecific(TestPlatforms.OSX)]
+        public void SocketSendReceiveBufferSize_SetZero_ThrowsSocketException()
+        {
+            using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                SocketException e;
+                e = Assert.Throws<SocketException>(() => socket.SendBufferSize = 0);
+                Assert.Equal(e.SocketErrorCode, SocketError.InvalidArgument);
+
+                e = Assert.Throws<SocketException>(() => socket.ReceiveBufferSize = 0);
+                Assert.Equal(e.SocketErrorCode, SocketError.InvalidArgument);
+            }
+        }
+
+        [Fact]
+        public async Task SendAsync_ConcurrentDispose_SucceedsOrThrowsAppropriateException()
+        {
+            if (UsesSync) return;
+
+            for (int i = 0; i < 20; i++) // run multiple times to attempt to force various interleavings
+            {
+                (Socket client, Socket server) = CreateConnectedSocketPair();
+                using (client)
+                using (server)
+                using (var b = new Barrier(2))
+                {
+                    Task dispose = Task.Factory.StartNew(() =>
+                    {
+                        b.SignalAndWait();
+                        client.Dispose();
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+                    Task send = Task.Factory.StartNew(() =>
+                    {
+                        b.SignalAndWait();
+                        SendAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+                    await dispose;
+                    Exception error = await Record.ExceptionAsync(() => send);
+                    if (error != null)
+                    {
+                        Assert.True(
+                            error is ObjectDisposedException ||
+                            error is SocketException ||
+                            (error is SEHException && PlatformDetection.IsUap),
+                            error.ToString());
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        public async Task ReceiveAsync_ConcurrentDispose_SucceedsOrThrowsAppropriateException()
+        {
+            if (UsesSync) return;
+
+            for (int i = 0; i < 20; i++) // run multiple times to attempt to force various interleavings
+            {
+                (Socket client, Socket server) = CreateConnectedSocketPair();
+                using (client)
+                using (server)
+                using (var b = new Barrier(2))
+                {
+                    Task dispose = Task.Factory.StartNew(() =>
+                    {
+                        b.SignalAndWait();
+                        client.Dispose();
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+                    Task send = Task.Factory.StartNew(() =>
+                    {
+                        SendAsync(server, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                        b.SignalAndWait();
+                        ReceiveAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+                    await dispose;
+                    Exception error = await Record.ExceptionAsync(() => send);
+                    if (error != null)
+                    {
+                        Assert.True(
+                            error is ObjectDisposedException ||
+                            error is SocketException ||
+                            (error is SEHException && PlatformDetection.IsUap),
+                            error.ToString());
+                    }
+                }
+            }
+        }
+
+        protected static (Socket, Socket) CreateConnectedSocketPair()
+        {
+            using (Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+                listener.Listen(1);
+
+                Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                client.Connect(listener.LocalEndPoint);
+                Socket server = listener.Accept();
+
+                return (client, server);
+            }
+        }
+    }
+
+    public class SendReceive
+    {
+        [Fact]
+        public void SendRecvIovMaxTcp_Success()
+        {
+            // sending/receiving more than IOV_MAX segments causes EMSGSIZE on some platforms.
+            // This is handled internally for stream sockets so this error shouldn't surface.
+
+            // Use more than IOV_MAX (1024 on Linux & macOS) segments.
+            const int SegmentCount = 2400;
+            using (var server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                server.BindToAnonymousPort(IPAddress.Loopback);
+                server.Listen(1);
+
+                var sendBuffer = new byte[SegmentCount];
+                Task serverProcessingTask = Task.Run(() =>
+                {
+                    using (Socket acceptSocket = server.Accept())
+                    {
+                        // send data as SegmentCount (> IOV_MAX) 1-byte segments.
+                        var sendSegments = new List<ArraySegment<byte>>();
+                        for (int i = 0; i < SegmentCount; i++)
+                        {
+                            sendBuffer[i] = (byte)i;
+                            sendSegments.Add(new ArraySegment<byte>(sendBuffer, i, 1));
+                        }
+                        SocketError error;
+                        // Send blocks until all segments are sent.
+                        int bytesSent = acceptSocket.Send(sendSegments, SocketFlags.None, out error);
+
+                        Assert.Equal(SegmentCount, bytesSent);
+                        Assert.Equal(SocketError.Success, error);
+
+                        acceptSocket.Shutdown(SocketShutdown.Send);
+                    }
+                });
+
+                using (var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+                {
+                    client.Connect(server.LocalEndPoint);
+
+                    // receive data as 1-byte segments.
+                    var receiveBuffer = new byte[SegmentCount];
+                    var receiveSegments = new List<ArraySegment<byte>>();
+                    for (int i = 0; i < SegmentCount; i++)
+                    {
+                        receiveSegments.Add(new ArraySegment<byte>(receiveBuffer, i, 1));
+                    }
+                    var bytesReceivedTotal = 0;
+                    do
+                    {
+                        SocketError error;
+                        // Receive can return up to IOV_MAX segments.
+                        int bytesReceived = client.Receive(receiveSegments, SocketFlags.None, out error);
+                        bytesReceivedTotal += bytesReceived;
+                        // Offset receiveSegments for next Receive.
+                        receiveSegments.RemoveRange(0, bytesReceived);
+
+                        Assert.NotEqual(0, bytesReceived);
+                        Assert.Equal(SocketError.Success, error);
+                    } while (bytesReceivedTotal != SegmentCount);
+
+                    Assert.Equal(sendBuffer, receiveBuffer);
+                }
+            }
+        }
+
+        [Fact]
+        public void SendIovMaxUdp_SuccessOrMessageSize()
+        {
+            // sending more than IOV_MAX segments causes EMSGSIZE on some platforms.
+            // We handle this for stream sockets by truncating.
+            // This test verifies we are not truncating non-stream sockets.
+
+            // Use more than IOV_MAX (1024 on Linux & macOS) segments
+            // and less than Ethernet MTU.
+            const int SegmentCount = 1200;
+            using (var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+            {
+                socket.BindToAnonymousPort(IPAddress.Loopback);
+                // Use our own address as destination.
+                socket.Connect(socket.LocalEndPoint);
+
+                var sendBuffer = new byte[SegmentCount];
+                var sendSegments = new List<ArraySegment<byte>>();
+                for (int i = 0; i < SegmentCount; i++)
+                {
+                    sendBuffer[i] = (byte)i;
+                    sendSegments.Add(new ArraySegment<byte>(sendBuffer, i, 1));
+                }
+
+                SocketError error;
+                // send data as SegmentCount (> IOV_MAX) 1-byte segments.
+                int bytesSent = socket.Send(sendSegments, SocketFlags.None, out error);
+                if (error == SocketError.Success)
+                {
+                    // platform sent message with > IOV_MAX segments
+                    Assert.Equal(SegmentCount, bytesSent);
+                }
+                else
+                {
+                    // platform returns EMSGSIZE
+                    Assert.Equal(SocketError.MessageSize, error);
+                    Assert.Equal(0, bytesSent);
+                }
+            }
+        }
+
+        [Fact]
+        public async Task ReceiveIovMaxUdp_SuccessOrMessageSize()
+        {
+            // receiving more than IOV_MAX segments causes EMSGSIZE on some platforms.
+            // We handle this for stream sockets by truncating.
+            // This test verifies we are not truncating non-stream sockets.
+
+            // Use more than IOV_MAX (1024 on Linux & macOS) segments
+            // and less than Ethernet MTU.
+            const int SegmentCount = 1200;
+            var sender = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            sender.BindToAnonymousPort(IPAddress.Loopback);
+            var receiver = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            receiver.Connect(sender.LocalEndPoint); // only receive from sender
+            EndPoint receiverEndPoint = receiver.LocalEndPoint;
+
+            Barrier b = new Barrier(2);
+
+            Task receiveTask = Task.Run(() =>
+            {
+                using (receiver)
+                {
+                    var receiveBuffer = new byte[SegmentCount];
+                    var receiveSegments = new List<ArraySegment<byte>>();
+                    for (int i = 0; i < SegmentCount; i++)
+                    {
+                        receiveSegments.Add(new ArraySegment<byte>(receiveBuffer, i, 1));
+                    }
+                    // receive data as SegmentCount (> IOV_MAX) 1-byte segments.
+                    SocketError error;
+                    // Signal we are ready to receive.
+                    b.SignalAndWait();
+                    int bytesReceived = receiver.Receive(receiveSegments, SocketFlags.None, out error);
+
+                    if (error == SocketError.Success)
+                    {
+                        // platform received message in > IOV_MAX segments
+                        Assert.Equal(SegmentCount, bytesReceived);
+                    }
+                    else
+                    {
+                        // platform returns EMSGSIZE
+                        Assert.Equal(SocketError.MessageSize, error);
+                        Assert.Equal(0, bytesReceived);
+                    }
+                }
+            });
+
+            using (sender)
+            {
+                sender.Connect(receiverEndPoint);
+
+                // Synchronize and wait for receiving task to be ready.
+                b.SignalAndWait();
+
+                var sendBuffer = new byte[SegmentCount];
+                for (int i = 0; i < 10; i++) // UDPRedundancy
+                {
+                    int bytesSent = sender.Send(sendBuffer);
+                    Assert.Equal(SegmentCount, bytesSent);
+                    await Task.WhenAny(receiveTask, Task.Delay(3));
+                    if (receiveTask.IsCompleted)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            Assert.True(receiveTask.IsCompleted);
+            await receiveTask;
+        }
+
+        [Fact]
+        [PlatformSpecific(~TestPlatforms.Windows)] // All data is sent, even when very large (100M).
+        public void SocketSendWouldBlock_ReturnsBytesSent()
+        {
+            using (var server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            using (var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                // listen
+                server.BindToAnonymousPort(IPAddress.Loopback);
+                server.Listen(1);
+                // connect
+                client.Connect(server.LocalEndPoint);
+                // accept
+                using (Socket socket = server.Accept())
+                {
+                    // We send a large amount of data but don't read it.
+                    // A chunck will be sent, attempts to send more will return SocketError.WouldBlock.
+                    // Socket.Send must return the success of the partial send.
+                    socket.Blocking = false;
+                    var data = new byte[5_000_000];
+                    SocketError error;
+                    int bytesSent = socket.Send(data, 0, data.Length, SocketFlags.None, out error);
+
+                    Assert.Equal(SocketError.Success, error);
+                    Assert.InRange(bytesSent, 1, data.Length - 1);
+                }
+            }
+        }
+
+        [Fact]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]
+        public async Task Socket_ReceiveFlags_Success()
+        {
+            using (var sender = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+            using (var receiver = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+            {
+                receiver.BindToAnonymousPort(IPAddress.Loopback);
+                sender.Connect(receiver.LocalEndPoint);
+                sender.SendBufferSize = 1500;
+
+                var data = new byte[500];
+                data[0] = data[499] = 1;
+
+                Assert.Equal(500, sender.Send(data));
+                data[0] = data[499] = 2;
+                Assert.Equal(500, sender.Send(data));
+
+                var tcs = new TaskCompletionSource<bool>();
+                SocketAsyncEventArgs args = new SocketAsyncEventArgs();
+
+                var receiveBufer = new byte[600];
+                receiveBufer[0] = data[499] = 0;
+
+                args.SetBuffer(receiveBufer, 0, receiveBufer.Length);
+                args.Completed += delegate { tcs.SetResult(true); };
+
+                // First peek at the message.
+                args.SocketFlags = SocketFlags.Peek;
+                if (receiver.ReceiveAsync(args))
+                {
+                    await tcs.Task.TimeoutAfter(TestSettings.PassingTestTimeout);
+                }
+                Assert.Equal(SocketFlags.None, args.SocketFlags);
+                Assert.Equal(1, receiveBufer[0]);
+                Assert.Equal(1, receiveBufer[499]);
+                receiveBufer[0] = receiveBufer[499] = 0;
+
+                // Now, we should be able to get same message again.
+                tcs = new TaskCompletionSource<bool>();
+                args.SocketFlags = SocketFlags.None;
+                if (receiver.ReceiveAsync(args))
+                {
+                    await tcs.Task.TimeoutAfter(TestSettings.PassingTestTimeout);
+                }
+                Assert.Equal(SocketFlags.None, args.SocketFlags);
+                Assert.Equal(1, receiveBufer[0]);
+                Assert.Equal(1, receiveBufer[499]);
+                receiveBufer[0] = receiveBufer[499] = 0;
+
+                // Set buffer smaller than message.
+                tcs = new TaskCompletionSource<bool>();
+                args.SetBuffer(receiveBufer, 0, 100);
+                if (receiver.ReceiveAsync(args))
+                {
+                    await tcs.Task.TimeoutAfter(TestSettings.PassingTestTimeout);
+                }
+                Assert.Equal(SocketFlags.Truncated, args.SocketFlags);
+                Assert.Equal(2, receiveBufer[0]);
+
+                // There should be no more data.
+                Assert.Equal(0, receiver.Available);
+            }
+        }
     }
 
     public sealed class SendReceiveUdpClient : MemberDatas
@@ -749,15 +1227,15 @@ namespace System.Net.Sockets.Tests
         [OuterLoop] // TODO: Issue #11345
         [Theory]
         [MemberData(nameof(Loopbacks))]
-        public void SendToRecvFromAsync_Datagram_UDP_UdpClient(IPAddress loopbackAddress)
+        public async Task SendToRecvFromAsync_Datagram_UDP_UdpClient(IPAddress loopbackAddress)
         {
             IPAddress leftAddress = loopbackAddress, rightAddress = loopbackAddress;
 
             // TODO #5185: harden against packet loss
             const int DatagramSize = 256;
             const int DatagramsToSend = 256;
-            const int AckTimeout = 1000;
-            const int TestTimeout = 30000;
+            const int AckTimeout = 10000;
+            const int TestTimeout = 60000;
 
             using (var left = new UdpClient(new IPEndPoint(leftAddress, 0)))
             using (var right = new UdpClient(new IPEndPoint(rightAddress, 0)))
@@ -815,7 +1293,7 @@ namespace System.Net.Sockets.Tests
                     }
                 });
 
-                Assert.True(Task.WaitAll(new[] { receiverTask, senderTask }, TestTimeout));
+                await (new[] { receiverTask, senderTask }).WhenAllOrAnyFailed(TestTimeout);
                 for (int i = 0; i < DatagramsToSend; i++)
                 {
                     Assert.NotNull(receivedChecksums[i]);
@@ -830,7 +1308,7 @@ namespace System.Net.Sockets.Tests
         [OuterLoop] // TODO: Issue #11345
         [Theory]
         [MemberData(nameof(Loopbacks))]
-        public void SendRecvAsync_TcpListener_TcpClient(IPAddress listenAt)
+        public async Task SendRecvAsync_TcpListener_TcpClient(IPAddress listenAt)
         {
             const int BytesToSend = 123456;
             const int ListenBacklog = 1;
@@ -848,7 +1326,7 @@ namespace System.Net.Sockets.Tests
                 using (NetworkStream stream = remote.GetStream())
                 {
                     var recvBuffer = new byte[256];
-                    for (;;)
+                    for (; ; )
                     {
                         int received = await stream.ReadAsync(recvBuffer, 0, recvBuffer.Length);
                         if (received == 0)
@@ -892,217 +1370,85 @@ namespace System.Net.Sockets.Tests
                 }
             });
 
-            Assert.True(Task.WaitAll(new[] { serverTask, clientTask }, TestTimeout),
-                $"Time out waiting for serverTask ({serverTask.Status}) and clientTask ({clientTask.Status})");
+            await (new[] { serverTask, clientTask }).WhenAllOrAnyFailed(TestTimeout);
 
             Assert.Equal(bytesSent, bytesReceived);
             Assert.Equal(sentChecksum.Sum, receivedChecksum.Sum);
         }
     }
 
-    public sealed class SendReceiveSync : SendReceive
+    public sealed class SendReceiveSync : SendReceive<SocketHelperArraySync>
     {
         public SendReceiveSync(ITestOutputHelper output) : base(output) { }
-        public override Task<Socket> AcceptAsync(Socket s) =>
-            Task.Run(() => s.Accept());
-        public override Task ConnectAsync(Socket s, EndPoint endPoint) =>
-            Task.Run(() => s.Connect(endPoint));
-        public override Task<int> ReceiveAsync(Socket s, ArraySegment<byte> buffer) =>
-            Task.Run(() => s.Receive(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None));
-        public override Task<int> ReceiveAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            Task.Run(() => s.Receive(bufferList, SocketFlags.None));
-        public override Task<SocketReceiveFromResult> ReceiveFromAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
-            Task.Run(() =>
-            {
-                int received = s.ReceiveFrom(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None, ref endPoint);
-                return new SocketReceiveFromResult
-                {
-                    ReceivedBytes = received,
-                    RemoteEndPoint = endPoint
-                };
-            });
-        public override Task<int> SendAsync(Socket s, ArraySegment<byte> buffer) =>
-            Task.Run(() => s.Send(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None));
-        public override Task<int> SendAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            Task.Run(() => s.Send(bufferList, SocketFlags.None));
-        public override Task<int> SendToAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
-            Task.Run(() => s.SendTo(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None, endPoint));
 
-        public override bool GuaranteedSendOrdering => false;
-        public override bool SupportsNonBlocking => false;
-    }
-
-    public sealed class SendReceiveApm : SendReceive
-    {
-        public SendReceiveApm(ITestOutputHelper output) : base(output) { }
-        public override Task<Socket> AcceptAsync(Socket s) =>
-            Task.Factory.FromAsync(s.BeginAccept, s.EndAccept, null);
-        public override Task ConnectAsync(Socket s, EndPoint endPoint) =>
-            Task.Factory.FromAsync(s.BeginConnect, s.EndConnect, endPoint, null);
-        public override Task<int> ReceiveAsync(Socket s, ArraySegment<byte> buffer) =>
-            Task.Factory.FromAsync((callback, state) =>
-                s.BeginReceive(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None, callback, state),
-                s.EndReceive, null);
-        public override Task<int> ReceiveAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            Task.Factory.FromAsync(s.BeginReceive, s.EndReceive, bufferList, SocketFlags.None, null);
-        public override Task<SocketReceiveFromResult> ReceiveFromAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint)
+        [OuterLoop]
+        [Fact]
+        public void BlockingRead_DoesntRequireAnotherThreadPoolThread()
         {
-            var tcs = new TaskCompletionSource<SocketReceiveFromResult>();
-            s.BeginReceiveFrom(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None, ref endPoint, iar =>
+            RemoteInvoke(() =>
             {
+                // Set the max number of worker threads to a low value.
+                ThreadPool.GetMaxThreads(out int workerThreads, out int completionPortThreads);
+                ThreadPool.SetMaxThreads(Environment.ProcessorCount, completionPortThreads);
+
+                // Create twice that many socket pairs, for good measure.
+                (Socket, Socket)[] socketPairs = Enumerable.Range(0, Environment.ProcessorCount * 2).Select(_ => CreateConnectedSocketPair()).ToArray();
                 try
                 {
-                    int receivedBytes = s.EndReceiveFrom(iar, ref endPoint);
-                    tcs.TrySetResult(new SocketReceiveFromResult
+                    // Ensure that on Unix all of the first socket in each pair are configured for sync-over-async.
+                    foreach ((Socket, Socket) pair in socketPairs)
                     {
-                        ReceivedBytes = receivedBytes,
-                        RemoteEndPoint = endPoint
-                    });
+                        pair.Item1.ForceNonBlocking(force: true);
+                    }
+
+                    // Queue a work item for each first socket to do a blocking receive.
+                    Task[] receives =
+                        (from pair in socketPairs
+                         select Task.Factory.StartNew(() => pair.Item1.Receive(new byte[1]), CancellationToken.None, TaskCreationOptions.PreferFairness, TaskScheduler.Default))
+                         .ToArray();
+
+                    // Give a bit of time for the pool to start executing the receives.  It's possible this won't be enough,
+                    // in which case the test we could get a false negative on the test, but we won't get spurious failures.
+                    Thread.Sleep(1000);
+
+                    // Now send to each socket.
+                    foreach ((Socket, Socket) pair in socketPairs)
+                    {
+                        pair.Item2.Send(new byte[1]);
+                    }
+
+                    // And wait for all the receives to complete.
+                    Assert.True(Task.WaitAll(receives, 60_000), "Expected all receives to complete within timeout");
                 }
-                catch (Exception e) { tcs.TrySetException(e); }
-            }, null);
-            return tcs.Task;
-        }
-        public override Task<int> SendAsync(Socket s, ArraySegment<byte> buffer) =>
-            Task.Factory.FromAsync((callback, state) =>
-                s.BeginSend(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None, callback, state),
-                s.EndSend, null);
-        public override Task<int> SendAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            Task.Factory.FromAsync(s.BeginSend, s.EndSend, bufferList, SocketFlags.None, null);
-        public override Task<int> SendToAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
-            Task.Factory.FromAsync(
-                (callback, state) => s.BeginSendTo(buffer.Array, buffer.Offset, buffer.Count, SocketFlags.None, endPoint, callback, state),
-                s.EndSendTo, null);
-    }
-
-    public sealed class SendReceiveTask : SendReceive
-    {
-        public SendReceiveTask(ITestOutputHelper output) : base(output) { }
-        public override Task<Socket> AcceptAsync(Socket s) =>
-            s.AcceptAsync();
-        public override Task ConnectAsync(Socket s, EndPoint endPoint) =>
-            s.ConnectAsync(endPoint);
-        public override Task<int> ReceiveAsync(Socket s, ArraySegment<byte> buffer) =>
-            s.ReceiveAsync(buffer, SocketFlags.None);
-        public override Task<int> ReceiveAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            s.ReceiveAsync(bufferList, SocketFlags.None);
-        public override Task<SocketReceiveFromResult> ReceiveFromAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
-            s.ReceiveFromAsync(buffer, SocketFlags.None, endPoint);
-        public override Task<int> SendAsync(Socket s, ArraySegment<byte> buffer) =>
-            s.SendAsync(buffer, SocketFlags.None);
-        public override Task<int> SendAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            s.SendAsync(bufferList, SocketFlags.None);
-        public override Task<int> SendToAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
-            s.SendToAsync(buffer, SocketFlags.None, endPoint);
-    }
-
-    public sealed class SendReceiveEap : SendReceive
-    {
-        public SendReceiveEap(ITestOutputHelper output) : base(output) { }
-
-        public override bool ValidatesArrayArguments => false;
-
-        public override Task<Socket> AcceptAsync(Socket s) =>
-            InvokeAsync(s, e => e.AcceptSocket, e => s.AcceptAsync(e));
-        public override Task ConnectAsync(Socket s, EndPoint endPoint) =>
-            InvokeAsync(s, e => true, e =>
-            {
-                e.RemoteEndPoint = endPoint;
-                return s.ConnectAsync(e);
-            });
-        public override Task<int> ReceiveAsync(Socket s, ArraySegment<byte> buffer) =>
-            InvokeAsync(s, e => e.BytesTransferred, e =>
-            {
-                e.SetBuffer(buffer.Array, buffer.Offset, buffer.Count);
-                return s.ReceiveAsync(e);
-            });
-        public override Task<int> ReceiveAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            InvokeAsync(s, e => e.BytesTransferred, e =>
-            {
-                e.BufferList = bufferList;
-                return s.ReceiveAsync(e);
-            });
-        public override Task<SocketReceiveFromResult> ReceiveFromAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
-            InvokeAsync(s, e => new SocketReceiveFromResult { ReceivedBytes = e.BytesTransferred, RemoteEndPoint = e.RemoteEndPoint }, e =>
-            {
-                e.SetBuffer(buffer.Array, buffer.Offset, buffer.Count);
-                e.RemoteEndPoint = endPoint;
-                return s.ReceiveFromAsync(e);
-            });
-        public override Task<int> SendAsync(Socket s, ArraySegment<byte> buffer) =>
-            InvokeAsync(s, e => e.BytesTransferred, e =>
-            {
-                e.SetBuffer(buffer.Array, buffer.Offset, buffer.Count);
-                return s.SendAsync(e);
-            });
-        public override Task<int> SendAsync(Socket s, IList<ArraySegment<byte>> bufferList) =>
-            InvokeAsync(s, e => e.BytesTransferred, e =>
-            {
-                e.BufferList = bufferList;
-                return s.SendAsync(e);
-            });
-        public override Task<int> SendToAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
-            InvokeAsync(s, e => e.BytesTransferred, e =>
-            {
-                e.SetBuffer(buffer.Array, buffer.Offset, buffer.Count);
-                e.RemoteEndPoint = endPoint;
-                return s.SendToAsync(e);
-            });
-
-        private static Task<TResult> InvokeAsync<TResult>(
-            Socket s,
-            Func<SocketAsyncEventArgs, TResult> getResult,
-            Func<SocketAsyncEventArgs, bool> invoke)
-        {
-            var tcs = new TaskCompletionSource<TResult>();
-            var saea = new SocketAsyncEventArgs();
-            EventHandler<SocketAsyncEventArgs> handler = (_, e) =>
-            {
-                if (e.SocketError == SocketError.Success) tcs.SetResult(getResult(e));
-                else tcs.SetException(new SocketException((int)e.SocketError));
-                saea.Dispose();
-            };
-            saea.Completed += handler;
-            if (!invoke(saea)) handler(s, saea);
-            return tcs.Task;
+                finally
+                {
+                    foreach ((Socket, Socket) pair in socketPairs)
+                    {
+                        pair.Item1.Dispose();
+                        pair.Item2.Dispose();
+                    }
+                }
+            }).Dispose();
         }
     }
 
-    public abstract class MemberDatas
+    public sealed class SendReceiveSyncForceNonBlocking : SendReceive<SocketHelperSyncForceNonBlocking>
     {
-        public static readonly object[][] Loopbacks = new[]
-        {
-            new object[] { IPAddress.Loopback },
-            new object[] { IPAddress.IPv6Loopback },
-        };
-
-        public static readonly object[][] LoopbacksAndBuffers = new object[][]
-        {
-            new object[] { IPAddress.IPv6Loopback, true },
-            new object[] { IPAddress.IPv6Loopback, false },
-            new object[] { IPAddress.Loopback, true },
-            new object[] { IPAddress.Loopback, false },
-        };
+        public SendReceiveSyncForceNonBlocking(ITestOutputHelper output) : base(output) {}
     }
 
-    internal struct FakeArraySegment
+    public sealed class SendReceiveApm : SendReceive<SocketHelperApm>
     {
-        public byte[] Array;
-        public int Offset;
-        public int Count;
-
-        public ArraySegment<byte> ToActual()
-        {
-            ArraySegmentWrapper wrapper = default(ArraySegmentWrapper);
-            wrapper.Fake = this;
-            return wrapper.Actual;
-        }
+        public SendReceiveApm(ITestOutputHelper output) : base(output) {}
     }
 
-    [StructLayout(LayoutKind.Explicit)]
-    internal struct ArraySegmentWrapper
+    public sealed class SendReceiveTask : SendReceive<SocketHelperTask>
     {
-        [FieldOffset(0)] public ArraySegment<byte> Actual;
-        [FieldOffset(0)] public FakeArraySegment Fake;
+        public SendReceiveTask(ITestOutputHelper output) : base(output) {}
+    }
+
+    public sealed class SendReceiveEap : SendReceive<SocketHelperEap>
+    {
+        public SendReceiveEap(ITestOutputHelper output) : base(output) {}
     }
 }

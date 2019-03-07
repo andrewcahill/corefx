@@ -14,7 +14,7 @@ namespace System.Linq.Tests
         public void SameResultsRepeatCallsIntQuery()
         {
             var q = from x in new[] { 9999, 0, 888, -1, 66, -777, 1, 2, -12345 }
-                             where x > Int32.MinValue
+                             where x > int.MinValue
                              select x;
 
             Assert.Equal(q.Last(), q.Last());
@@ -23,8 +23,8 @@ namespace System.Linq.Tests
         [Fact]
         public void SameResultsRepeatCallsStringQuery()
         {
-            var q = from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", String.Empty }
-                             where !String.IsNullOrEmpty(x)
+            var q = from x in new[] { "!@#$%^", "C", "AAA", "", "Calling Twice", "SoS", string.Empty }
+                             where !string.IsNullOrEmpty(x)
                              select x;
 
             Assert.Equal(q.Last(), q.Last());
@@ -245,20 +245,20 @@ namespace System.Linq.Tests
         [Fact]
         public void NullSource()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Last());
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Last());
         }
 
         [Fact]
         public void NullSourcePredicateUsed()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Last(i => i != 2));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Last(i => i != 2));
         }
 
         [Fact]
         public void NullPredicate()
         {
             Func<int, bool> predicate = null;
-            Assert.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 3).Last(predicate));
+            AssertExtensions.Throws<ArgumentNullException>("predicate", () => Enumerable.Range(0, 3).Last(predicate));
         }
     }
 }

@@ -16,34 +16,33 @@ namespace System.Linq
         {
             if (first == null)
             {
-                throw Error.ArgumentNull(nameof(first));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.first);
             }
 
             if (second == null)
             {
-                throw Error.ArgumentNull(nameof(second));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.second);
             }
 
-            UnionIterator<TSource> union = first as UnionIterator<TSource>;
-            return union != null && AreEqualityComparersEqual(comparer, union._comparer) ? union.Union(second) : new UnionIterator2<TSource>(first, second, comparer);
+            return first is UnionIterator<TSource> union && AreEqualityComparersEqual(comparer, union._comparer) ? union.Union(second) : new UnionIterator2<TSource>(first, second, comparer);
         }
 
         /// <summary>
         /// An iterator that yields distinct values from two or more <see cref="IEnumerable{TSource}"/>.
         /// </summary>
         /// <typeparam name="TSource">The type of the source enumerables.</typeparam>
-        private abstract class UnionIterator<TSource> : Iterator<TSource>, IIListProvider<TSource>
+        private abstract partial class UnionIterator<TSource> : Iterator<TSource>
         {
             internal readonly IEqualityComparer<TSource> _comparer;
             private IEnumerator<TSource> _enumerator;
             private Set<TSource> _set;
 
-            public UnionIterator(IEqualityComparer<TSource> comparer)
+            protected UnionIterator(IEqualityComparer<TSource> comparer)
             {
                 _comparer = comparer;
             }
 
-            public override sealed void Dispose()
+            public sealed override void Dispose()
             {
                 if (_enumerator != null)
                 {
@@ -59,17 +58,14 @@ namespace System.Linq
 
             internal abstract UnionIterator<TSource> Union(IEnumerable<TSource> next);
 
-            protected void SetEnumerator(IEnumerator<TSource> enumerator)
+            private void SetEnumerator(IEnumerator<TSource> enumerator)
             {
-                if (_enumerator != null)
-                {
-                    _enumerator.Dispose();
-                }
+                _enumerator?.Dispose();
 
                 _enumerator = enumerator;
             }
 
-            protected void StoreFirst()
+            private void StoreFirst()
             {
                 Set<TSource> set = new Set<TSource>(_comparer);
                 TSource element = _enumerator.Current;
@@ -78,7 +74,7 @@ namespace System.Linq
                 _set = set;
             }
 
-            protected bool GetNext()
+            private bool GetNext()
             {
                 Set<TSource> set = _set;
                 Debug.Assert(set != null);
@@ -134,36 +130,6 @@ namespace System.Linq
 
                 Dispose();
                 return false;
-            }
-
-            private Set<TSource> FillSet()
-            {
-                Set<TSource> set = new Set<TSource>(_comparer);
-                for (int index = 0; ; ++index)
-                {
-                    IEnumerable<TSource> enumerable = GetEnumerable(index);
-                    if (enumerable == null)
-                    {
-                        return set;
-                    }
-
-                    set.UnionWith(enumerable);
-                }
-            }
-
-            public TSource[] ToArray()
-            {
-                return FillSet().ToArray();
-            }
-
-            public List<TSource> ToList()
-            {
-                return FillSet().ToList();
-            }
-
-            public int GetCount(bool onlyIfCheap)
-            {
-                return onlyIfCheap ? -1 : FillSet().Count;
             }
         }
         

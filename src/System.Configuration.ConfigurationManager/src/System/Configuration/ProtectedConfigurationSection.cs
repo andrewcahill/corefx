@@ -34,6 +34,8 @@ namespace System.Configuration
             s_properties = new ConfigurationPropertyCollection { s_propProviders, s_propDefaultProvider };
         }
 
+        public ProtectedConfigurationSection(){}
+
         protected internal override ConfigurationPropertyCollection Properties => s_properties;
 
         private ProtectedProviderSettings ProtectedProviders => (ProtectedProviderSettings)base[s_propProviders];
@@ -53,7 +55,7 @@ namespace System.Configuration
             ProviderSettings ps = Providers[providerName];
 
             if (ps == null)
-                throw new Exception(string.Format(SR.ProtectedConfigurationProvider_not_found, providerName));
+                throw new ArgumentException(SR.Format(SR.ProtectedConfigurationProvider_not_found, providerName), nameof(providerName));
 
             return InstantiateProvider(ps);
         }
@@ -83,7 +85,7 @@ namespace System.Configuration
         {
             Type t = TypeUtil.GetType(pn.Type, true);
             if (!typeof(ProtectedConfigurationProvider).IsAssignableFrom(t))
-                throw new Exception(SR.WrongType_of_Protected_provider);
+                throw new ArgumentException(SR.WrongType_of_Protected_provider, nameof(pn));
 
             return CreateAndInitializeProviderWithAssert(t, pn);
         }

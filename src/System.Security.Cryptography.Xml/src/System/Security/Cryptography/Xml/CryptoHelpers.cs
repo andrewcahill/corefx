@@ -12,8 +12,11 @@ namespace System.Security.Cryptography.Xml
 {
     internal static class CryptoHelpers
     {
+        private static readonly char[] _invalidChars = new char[] { ',', '`', '[', '*', '&' };
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5350", Justification = "SHA1 needed for compat.")]
-        public static object CreateFromName(string name)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Security", "CA5351", Justification = "HMACMD5 needed for compat.")]
+        public static object CreateFromKnownName(string name)
         {
             switch (name)
             {
@@ -49,36 +52,50 @@ namespace System.Security.Cryptography.Xml
                     return new KeyInfoRetrievalMethod();
                 case "http://www.w3.org/2001/04/xmlenc# EncryptedKey":
                     return new KeyInfoEncryptedKey();
-                case "http://www.w3.org/2001/04/xmldsig-more#hmac-ripemd160":
-                    throw new NotImplementedException(name);
-                    //return new System.Security.Cryptography.HMACRIPEMD160();
                 case "http://www.w3.org/2000/09/xmldsig#dsa-sha1":
                     return new DSASignatureDescription();
                 case "System.Security.Cryptography.DSASignatureDescription":
-                    throw new NotImplementedException(name);
-                    //return new DSASignatureDescription();
+                    return new DSASignatureDescription();
                 case "http://www.w3.org/2000/09/xmldsig#rsa-sha1":
                     return new RSAPKCS1SHA1SignatureDescription();
                 case "System.Security.Cryptography.RSASignatureDescription":
-                    throw new NotImplementedException(name);
-                    //return new RSAPKCS1SHA1SignatureDescription();
+                    return new RSAPKCS1SHA1SignatureDescription();
                 case "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256":
-                    throw new NotImplementedException(name);
-                    //return new RSAPKCS1SHA256SignatureDescription();
+                    return new RSAPKCS1SHA256SignatureDescription();
                 case "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384":
-                    throw new NotImplementedException(name);
-                    //return new RSAPKCS1SHA384SignatureDescription();
+                    return new RSAPKCS1SHA384SignatureDescription();
                 case "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512":
-                    throw new NotImplementedException(name);
-                    //return new RSAPKCS1SHA512SignatureDescription();
+                    return new RSAPKCS1SHA512SignatureDescription();
 
                 // workarounds for issue https://github.com/dotnet/corefx/issues/16563
                 // remove attribute from this method when removing them
                 case "http://www.w3.org/2000/09/xmldsig#sha1":
                     return SHA1.Create();
+                case "MD5":
+                    return MD5.Create();
+                case "http://www.w3.org/2001/04/xmldsig-more#hmac-md5":
+                    return new HMACMD5();
+                case "http://www.w3.org/2001/04/xmlenc#tripledes-cbc":
+                    return TripleDES.Create();
             }
 
-            return CryptoConfig.CreateFromName(name);
+            return null;
+        }
+
+        public static T CreateFromName<T>(string name) where T : class
+        {
+            if (name == null || name.IndexOfAny(_invalidChars) >= 0)
+            {
+                return null;
+            }
+            try
+            {
+                return (CreateFromKnownName(name) ?? CryptoConfig.CreateFromName(name)) as T;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
     }
 }

@@ -21,7 +21,7 @@ namespace System.Threading
     ///    whether there were any intermediate writes. Downgrading from a writer lock restores the state of the lock.
     /// 7. Supports functionality to release all locks owned by a thread (see <see cref="ReleaseLock"/>).
     ///    <see cref="RestoreLock(ref LockCookie)"/> restores the lock state.
-    /// 8. Recovers from most common failures such as creation of events. In other words, the lock mainitains consistent
+    /// 8. Recovers from most common failures such as creation of events. In other words, the lock maintains consistent
     ///    internal state and remains usable
     /// </summary>
     public sealed class ReaderWriterLock : CriticalFinalizerObject
@@ -1134,18 +1134,12 @@ namespace System.Threading
         /// <see cref="ReaderWriterLockApplicationException"/> is thrown with the same <see cref="Exception.HResult"/> as
         /// before.
         /// </summary>
-        [Serializable]
         private sealed class ReaderWriterLockApplicationException : ApplicationException
         {
             public ReaderWriterLockApplicationException(int errorHResult, string message)
                 : base(SR.Format(message, SR.Format(SR.ExceptionFromHResult, errorHResult)))
             {
                 HResult = errorHResult;
-            }
-
-            private ReaderWriterLockApplicationException(SerializationInfo info, StreamingContext context)
-                : base(info, context)
-            {
             }
         }
 
@@ -1206,7 +1200,7 @@ namespace System.Threading
         /// owned by a thread.
         /// 
         /// The original code maintained lists of thread-local lock entries on the CLR's thread objects, and manually released
-        /// lock entries, which involved walking through all threads. While this is possible with ThreadLocal<T>, this
+        /// lock entries, which involved walking through all threads. While this is possible with ThreadLocal{T}, this
         /// implementation prefers to use a similar design to that from ReaderWriterLockSlim, and allow reusing free entries
         /// without removing entries, since it is unlikely that the list length for any thread would get unreasonably long.
         /// </summary>

@@ -8,7 +8,6 @@ using System.Runtime.Serialization;
 
 namespace System.Configuration
 {
-    [Serializable]
     public sealed class ConfigurationSectionGroupCollection : NameObjectCollectionBase
     {
         private readonly ConfigurationSectionGroup _configSectionGroup;
@@ -26,11 +25,6 @@ namespace System.Configuration
                 FactoryId factoryId = (FactoryId)de.Value;
                 if (factoryId.Group == _configSectionGroup.SectionGroupName) BaseAdd(factoryId.Name, factoryId.Name);
             }
-        }
-
-        private ConfigurationSectionGroupCollection(SerializationInfo serializationInfo, StreamingContext streamingContext)
-            : base(serializationInfo, streamingContext)
-        {
         }
 
         // Indexer via name
@@ -96,7 +90,7 @@ namespace System.Configuration
                 throw ExceptionUtil.ParameterNullOrEmpty(nameof(name));
 
             // prevent GetConfig from returning config not in this collection
-            if (name.IndexOf('/') >= 0)
+            if (name.IndexOf('/') >= 0) // string.Contains(char) is .NetCore2.1+ specific
                 return null;
 
             // get the section group

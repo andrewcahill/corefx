@@ -1795,7 +1795,8 @@ namespace System.Linq.Expressions.Tests
         }
 
         [Fact]
-        public static void Spill_Optimizations_LiteralField()
+        [SkipOnTargetFramework(~TargetFrameworkMonikers.NetFramework)]
+        public static void Spill_Optimizations_LiteralField_NetFramework()
         {
             Expression<Func<double>> e =
                 Expression.Lambda<Func<double>>(
@@ -1830,6 +1831,55 @@ namespace System.Linq.Expressions.Tests
 
                   // <OPTIMIZATION> Evaluate lhs (`Math.PI` gets inlined) </OPTIMIZATION>
                   IL_0012: ldc.r8     3.14159265358979
+
+                  // Load rhs from V_0
+                  IL_001b: ldloc.0
+
+                  // Evaluate `lhs + rhs`
+                  IL_001c: add
+
+                  IL_001d: ret
+                }"
+            );
+        }
+
+        [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework)]
+        public static void Spill_Optimizations_LiteralField_NotNetFramework()
+        {
+            Expression<Func<double>> e =
+                Expression.Lambda<Func<double>>(
+                    Expression.Add(
+                        Expression.Field(null, typeof(Math).GetField(nameof(Math.PI))),
+                        Spill(Expression.Constant(0.0))
+                    )
+                );
+
+            e.VerifyIL(@"
+                .method float64 ::lambda_method(class [System.Linq.Expressions]System.Runtime.CompilerServices.Closure)
+                {
+                  .maxstack 3
+                  .locals init (
+                    [0] float64,
+                    [1] float64
+                  )
+
+                  // Save rhs (`try { 0.0 } finally {}`) into V_0
+                  .try
+                  {
+                    IL_0000: ldc.r8     0
+                    IL_0009: stloc.1
+                    IL_000a: leave      IL_0010
+                  }
+                  finally
+                  {
+                    IL_000f: endfinally
+                  }
+                  IL_0010: ldloc.1
+                  IL_0011: stloc.0
+
+                  // <OPTIMIZATION> Evaluate lhs (`Math.PI` gets inlined) </OPTIMIZATION>
+                  IL_0012: ldc.r8     3.141592653589793
 
                   // Load rhs from V_0
                   IL_001b: ldloc.0
@@ -1983,7 +2033,7 @@ namespace System.Linq.Expressions.Tests
                   IL_0006: dup
                   IL_0007: ldc.i4.0
                   IL_0008: ldarg.2
-                  IL_0009: newobj     instance void class [System.Runtime]System.Runtime.CompilerServices.StrongBox`1<int32>::.ctor(int32)
+                  IL_0009: newobj     instance void class [System.Private.CoreLib]System.Runtime.CompilerServices.StrongBox`1<int32>::.ctor(int32)
                   IL_000e: stelem.ref
                   IL_000f: stloc.0
 

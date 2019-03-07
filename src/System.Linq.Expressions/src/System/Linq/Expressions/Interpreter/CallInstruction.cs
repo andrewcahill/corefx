@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Collections.Generic;
 using System.Reflection;
-using System.Reflection.Emit;
 using System.Dynamic.Utils;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace System.Linq.Expressions.Interpreter
 {
@@ -18,12 +18,10 @@ namespace System.Linq.Expressions.Interpreter
 
         #region Construction
 
-        internal CallInstruction() { }
-
         public override string InstructionName => "Call";
 
 #if FEATURE_DLG_INVOKE
-        private static readonly Dictionary<MethodInfo, CallInstruction> _cache = new Dictionary<MethodInfo, CallInstruction>();
+        private static readonly CacheDict<MethodInfo, CallInstruction> s_cache = new CacheDict<MethodInfo, CallInstruction>(256);
 #endif
 
         public static CallInstruction Create(MethodInfo info)
@@ -76,12 +74,9 @@ namespace System.Linq.Expressions.Interpreter
             CallInstruction res;
             if (ShouldCache(info))
             {
-                lock (_cache)
+                if (s_cache.TryGetValue(info, out res))
                 {
-                    if (_cache.TryGetValue(info, out res))
-                    {
-                        return res;
-                    }
+                    return res;
                 }
             }
 
@@ -120,10 +115,7 @@ namespace System.Linq.Expressions.Interpreter
             // cache it for future users if it's a reasonable method to cache
             if (ShouldCache(info))
             {
-                lock (_cache)
-                {
-                    _cache[info] = res;
-                }
+                s_cache[info] = res;
             }
 
             return res;
@@ -258,8 +250,6 @@ namespace System.Linq.Expressions.Interpreter
         #region Instruction
 
         public override int ConsumedStack => ArgumentCount;
-
-        public override string ToString() => "Call()";
 
         #endregion
 

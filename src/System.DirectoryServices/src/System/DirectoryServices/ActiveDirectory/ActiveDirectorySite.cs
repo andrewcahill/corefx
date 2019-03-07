@@ -2,18 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Runtime.InteropServices;
+using System.Collections;
+using System.Diagnostics;
+using System.Text;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Collections;
-    using System.DirectoryServices;
-    using System.Diagnostics;
-    using System.Globalization;
-    using System.Text;
-    using System.ComponentModel;
-    using System.Security.Permissions;
-
     [Flags]
     public enum ActiveDirectorySiteOptions
     {
@@ -33,21 +28,21 @@ namespace System.DirectoryServices.ActiveDirectory
 
     public class ActiveDirectorySite : IDisposable
     {
-        internal DirectoryContext context = null;
-        private string _name = null;
-        internal DirectoryEntry cachedEntry = null;
+        internal readonly DirectoryContext context = null;
+        private readonly string _name = null;
+        internal readonly DirectoryEntry cachedEntry = null;
         private DirectoryEntry _ntdsEntry = null;
-        private ActiveDirectorySubnetCollection _subnets = null;
+        private readonly ActiveDirectorySubnetCollection _subnets = null;
         private DirectoryServer _topologyGenerator = null;
-        private ReadOnlySiteCollection _adjacentSites = new ReadOnlySiteCollection();
+        private readonly ReadOnlySiteCollection _adjacentSites = new ReadOnlySiteCollection();
         private bool _disposed = false;
-        private DomainCollection _domains = new DomainCollection(null);
-        private ReadOnlyDirectoryServerCollection _servers = new ReadOnlyDirectoryServerCollection();
-        private ReadOnlySiteLinkCollection _links = new ReadOnlySiteLinkCollection();
+        private readonly DomainCollection _domains = new DomainCollection(null);
+        private readonly ReadOnlyDirectoryServerCollection _servers = new ReadOnlyDirectoryServerCollection();
+        private readonly ReadOnlySiteLinkCollection _links = new ReadOnlySiteLinkCollection();
         private ActiveDirectorySiteOptions _siteOptions = ActiveDirectorySiteOptions.None;
         private ReadOnlyDirectoryServerCollection _bridgeheadServers = new ReadOnlyDirectoryServerCollection();
-        private DirectoryServerCollection _SMTPBridgeheadServers = null;
-        private DirectoryServerCollection _RPCBridgeheadServers = null;
+        private readonly DirectoryServerCollection _SMTPBridgeheadServers = null;
+        private readonly DirectoryServerCollection _RPCBridgeheadServers = null;
         private byte[] _replicationSchedule = null;
 
         internal bool existing = false;
@@ -90,7 +85,7 @@ namespace System.DirectoryServices.ActiveDirectory
             catch (ActiveDirectoryObjectNotFoundException)
             {
                 // this is the case where the context is a config set and we could not find an ADAM instance in that config set
-                throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.ADAMInstanceNotFoundInConfigSet , context.Name));
+                throw new ActiveDirectoryOperationException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet , context.Name));
             }
 
             try
@@ -161,7 +156,7 @@ namespace System.DirectoryServices.ActiveDirectory
             catch (ActiveDirectoryObjectNotFoundException)
             {
                 // this is the case where the context is a config set and we could not find an ADAM instance in that config set
-                throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.ADAMInstanceNotFoundInConfigSet , context.Name));
+                throw new ActiveDirectoryOperationException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet , context.Name));
             }
             finally
             {
@@ -419,7 +414,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     throw new ObjectDisposedException(GetType().Name);
 
                 if (value == null)
-                    throw new ArgumentNullException("value");
+                    throw new ArgumentNullException(nameof(value));
 
                 if (existing)
                 {
@@ -705,7 +700,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     {
                         if (e.ErrorCode == unchecked((int)0x80072030))
                         {
-                            string message = String.Format(CultureInfo.CurrentCulture, SR.NTDSSiteSetting , _name);
+                            string message = SR.Format(SR.NTDSSiteSetting , _name);
                             throw new ActiveDirectoryOperationException(message, e, 0x2030);
                         }
                         throw ExceptionHelper.GetExceptionFromCOMException(context, e);
@@ -1114,26 +1109,26 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             // basic validation first
             if (context == null)
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
 
             // if target is not specified, then we determin the target from the logon credential, so if it is a local user context, it should fail
             if ((context.Name == null) && (!context.isRootDomain()))
             {
-                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, "context");
+                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, nameof(context));
             }
 
             // more validation for the context, if the target is not null, then it should be either forest name or server name
             if (context.Name != null)
             {
                 if (!(context.isRootDomain() || context.isServer() || context.isADAMConfigSet()))
-                    throw new ArgumentException(SR.NotADOrADAM, "context");
+                    throw new ArgumentException(SR.NotADOrADAM, nameof(context));
             }
 
             if (siteName == null)
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
 
             if (siteName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
         }
 
         private void GetSubnets()
@@ -1213,14 +1208,14 @@ namespace System.DirectoryServices.ActiveDirectory
                     string linkName = (string)PropertyManager.GetSearchResultPropertyValue(result, PropertyManager.Cn);
                     string transportName = (string)Utils.GetDNComponents(dn)[1].Value;
                     ActiveDirectoryTransportType transportType;
-                    if (String.Compare(transportName, "IP", StringComparison.OrdinalIgnoreCase) == 0)
+                    if (string.Equals(transportName, "IP", StringComparison.OrdinalIgnoreCase))
                         transportType = ActiveDirectoryTransportType.Rpc;
-                    else if (String.Compare(transportName, "SMTP", StringComparison.OrdinalIgnoreCase) == 0)
+                    else if (string.Equals(transportName, "SMTP", StringComparison.OrdinalIgnoreCase))
                         transportType = ActiveDirectoryTransportType.Smtp;
                     else
                     {
                         // should not happen
-                        string message = String.Format(CultureInfo.CurrentCulture, SR.UnknownTransport , transportName);
+                        string message = SR.Format(SR.UnknownTransport , transportName);
                         throw new ActiveDirectoryOperationException(message);
                     }
 
@@ -1280,14 +1275,14 @@ namespace System.DirectoryServices.ActiveDirectory
                     string cn = (string)PropertyManager.GetSearchResultPropertyValue(result, PropertyManager.Cn);
                     string transport = Utils.GetDNComponents((string)PropertyManager.GetSearchResultPropertyValue(result, PropertyManager.DistinguishedName))[1].Value;
                     ActiveDirectorySiteLink link = null;
-                    if (String.Compare(transport, "IP", StringComparison.OrdinalIgnoreCase) == 0)
+                    if (string.Equals(transport, "IP", StringComparison.OrdinalIgnoreCase))
                         link = new ActiveDirectorySiteLink(context, cn, ActiveDirectoryTransportType.Rpc, true, connectionEntry);
-                    else if (String.Compare(transport, "SMTP", StringComparison.OrdinalIgnoreCase) == 0)
+                    else if (string.Equals(transport, "SMTP", StringComparison.OrdinalIgnoreCase))
                         link = new ActiveDirectorySiteLink(context, cn, ActiveDirectoryTransportType.Smtp, true, connectionEntry);
                     else
                     {
                         // should not happen
-                        string message = String.Format(CultureInfo.CurrentCulture, SR.UnknownTransport , transport);
+                        string message = SR.Format(SR.UnknownTransport , transport);
                         throw new ActiveDirectoryOperationException(message);
                     }
 

@@ -2,9 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.Data;
-using System.Data.Common;
 using System.Data.ProviderBase;
 using System.Diagnostics;
 
@@ -17,12 +14,12 @@ namespace System.Data.Odbc
 
         internal const int CommandTag = 1;
 
-        override public void Add(object value, int tag)
+        public override void Add(object value, int tag)
         {
             base.AddItem(value, tag);
         }
 
-        override protected void NotifyItem(int message, int tag, object value)
+        protected override void NotifyItem(int message, int tag, object value)
         {
             switch (message)
             {
@@ -33,7 +30,7 @@ namespace System.Data.Odbc
                     }
                     else
                     {
-                        Debug.Assert(false, "shouldn't be here");
+                        Debug.Fail("shouldn't be here");
                     }
                     break;
                 case Closing:
@@ -43,16 +40,16 @@ namespace System.Data.Odbc
                     }
                     else
                     {
-                        Debug.Assert(false, "shouldn't be here");
+                        Debug.Fail("shouldn't be here");
                     }
                     break;
                 default:
-                    Debug.Assert(false, "shouldn't be here");
+                    Debug.Fail("shouldn't be here");
                     break;
             }
         }
 
-        override public void Remove(object value)
+        public override void Remove(object value)
         {
             base.RemoveItem(value);
         }

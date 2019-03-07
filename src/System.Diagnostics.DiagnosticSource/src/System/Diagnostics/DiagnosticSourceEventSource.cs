@@ -28,9 +28,9 @@ namespace System.Diagnostics
     ///   list that will be forwarded to the EventSource.    If it is empty, values of properties of the 
     ///   diagnostic source payload are dumped as strings (using ToString()) and forwarded to the EventSource.  
     ///   For what people think of as serializable object strings, primitives this gives you want you want. 
-    ///   (the value of the property in string form) for what people think of as non-serialiable objects 
+    ///   (the value of the property in string form) for what people think of as non-serializable objects 
     ///   (e.g. HttpContext) the ToString() method is typically not defined, so you get the Object.ToString() 
-    ///   implemenation that prints the type name.  This is useful since this is the information you need 
+    ///   implementation that prints the type name.  This is useful since this is the information you need 
     ///   (the type of the property) to discover the field names so you can create a transform specification
     ///   that will pick off the properties you desire.  
     ///   
@@ -124,9 +124,9 @@ namespace System.Diagnostics
     ///     "MyDiagnosticSource/SecurityStart@Activity2Start\r\n" + 
     ///     "MyDiagnosticSource/SecurityStop@Activity2Stop\r\n" 
     /// 
-    /// Defines that RequestStart will be logged with the EventSource Event Activity1Start (and the cooresponding stop) which
-    /// means that all events caused between these two markers will have an activity ID assocatied with this start event.  
-    /// Simmilarly SecurityStart is mapped to Activity2Start.    
+    /// Defines that RequestStart will be logged with the EventSource Event Activity1Start (and the corresponding stop) which
+    /// means that all events caused between these two markers will have an activity ID associated with this start event.  
+    /// Similarly SecurityStart is mapped to Activity2Start.    
     /// 
     /// Note you can map many DiangosticSource events to the same EventSource Event (e.g. Activity1Start).  As long as the
     /// activities don't nest, you can reuse the same event name (since the payloads have the DiagnosticSource name which can
@@ -441,7 +441,7 @@ namespace System.Diagnostics
                 for (;;)
                 {
                     // Skip trailing whitespace.
-                    while (0 < endIdx && Char.IsWhiteSpace(filterAndPayloadSpecs[endIdx - 1]))
+                    while (0 < endIdx && char.IsWhiteSpace(filterAndPayloadSpecs[endIdx - 1]))
                         --endIdx;
 
                     int newlineIdx = filterAndPayloadSpecs.LastIndexOf('\n', endIdx - 1, endIdx);
@@ -450,7 +450,7 @@ namespace System.Diagnostics
                         startIdx = newlineIdx + 1;  // starts after the newline, or zero if we don't find one.   
 
                     // Skip leading whitespace
-                    while (startIdx < endIdx && Char.IsWhiteSpace(filterAndPayloadSpecs[startIdx]))
+                    while (startIdx < endIdx && char.IsWhiteSpace(filterAndPayloadSpecs[startIdx]))
                         startIdx++;
 
                     specList = new FilterAndTransform(filterAndPayloadSpecs, startIdx, endIdx, eventSource, specList);
@@ -800,13 +800,13 @@ namespace System.Diagnostics
                 public object Fetch(object obj)
                 {
                     Type objType = obj.GetType();
-                    if (objType != _expectedType)
+                    PropertyFetch fetch = _fetchForExpectedType;
+                    if (fetch == null || fetch.Type != objType)
                     {
-                        var typeInfo = objType.GetTypeInfo();
-                        _fetchForExpectedType = PropertyFetch.FetcherForProperty(typeInfo.GetDeclaredProperty(_propertyName));
-                        _expectedType = objType;
+                        _fetchForExpectedType = fetch = PropertyFetch.FetcherForProperty(
+                            objType, objType.GetTypeInfo().GetDeclaredProperty(_propertyName));
                     }
-                    return _fetchForExpectedType.Fetch(obj);
+                    return fetch.Fetch(obj);
                 }
 
                 /// <summary>
@@ -820,21 +820,29 @@ namespace System.Diagnostics
                 /// to efficiently fetch that property from a .NET object (See Fetch method).  
                 /// It hides some slightly complex generic code.  
                 /// </summary>
-                class PropertyFetch
+                private class PropertyFetch
                 {
+                    protected PropertyFetch(Type type)
+                    {
+                        Debug.Assert(type != null);
+                        Type = type;
+                    }
+
+                    internal Type Type { get; }
+
                     /// <summary>
                     /// Create a property fetcher from a .NET Reflection PropertyInfo class that
                     /// represents a property of a particular type.  
                     /// </summary>
-                    public static PropertyFetch FetcherForProperty(PropertyInfo propertyInfo)
+                    public static PropertyFetch FetcherForProperty(Type type, PropertyInfo propertyInfo)
                     {
                         if (propertyInfo == null)
-                            return new PropertyFetch();     // returns null on any fetch.
+                            return new PropertyFetch(type);     // returns null on any fetch.
 
                         var typedPropertyFetcher = typeof(TypedFetchProperty<,>);
                         var instantiatedTypedPropertyFetcher = typedPropertyFetcher.GetTypeInfo().MakeGenericType(
                             propertyInfo.DeclaringType, propertyInfo.PropertyType);
-                        return (PropertyFetch)Activator.CreateInstance(instantiatedTypedPropertyFetcher, propertyInfo);
+                        return (PropertyFetch)Activator.CreateInstance(instantiatedTypedPropertyFetcher, type, propertyInfo);
                     }
 
                     /// <summary>
@@ -844,9 +852,9 @@ namespace System.Diagnostics
 
                     #region private 
 
-                    private class TypedFetchProperty<TObject, TProperty> : PropertyFetch
+                    private sealed class TypedFetchProperty<TObject, TProperty> : PropertyFetch
                     {
-                        public TypedFetchProperty(PropertyInfo property)
+                        public TypedFetchProperty(Type type, PropertyInfo property) : base(type)
                         {
                             _propertyFetch = (Func<TObject, TProperty>)property.GetMethod.CreateDelegate(typeof(Func<TObject, TProperty>));
                         }
@@ -860,8 +868,7 @@ namespace System.Diagnostics
                 }
 
                 private string _propertyName;
-                private Type _expectedType;
-                private PropertyFetch _fetchForExpectedType;
+                private volatile PropertyFetch _fetchForExpectedType;
                 #endregion
             }
 
@@ -871,7 +878,7 @@ namespace System.Diagnostics
         }
 
         /// <summary>
-        /// CallbackObserver is a adapter class that creates an observer (which you can pass
+        /// CallbackObserver is an adapter class that creates an observer (which you can pass
         /// to IObservable.Subscribe), and calls the given callback every time the 'next' 
         /// operation on the IObserver happens. 
         /// </summary>

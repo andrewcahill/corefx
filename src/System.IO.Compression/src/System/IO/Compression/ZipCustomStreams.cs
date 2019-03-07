@@ -2,12 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.Contracts;
 using System.Diagnostics;
 
 namespace System.IO.Compression
 {
-    internal sealed class WrappedStream : Stream
+    internal sealed partial class WrappedStream : Stream
     {
         private readonly Stream _baseStream;
         private readonly bool _closeBaseStream;
@@ -145,7 +144,7 @@ namespace System.IO.Compression
         }
     }
 
-    internal sealed class SubReadStream : Stream
+    internal sealed partial class SubReadStream : Stream
     {
         private readonly long _startInSuperStream;
         private long _positionInSuperStream;
@@ -168,8 +167,6 @@ namespace System.IO.Compression
         {
             get
             {
-                Contract.Ensures(Contract.Result<long>() >= 0);
-
                 ThrowIfDisposed();
 
                 return _endInSuperStream - _startInSuperStream;
@@ -180,8 +177,6 @@ namespace System.IO.Compression
         {
             get
             {
-                Contract.Ensures(Contract.Result<long>() >= 0);
-
                 ThrowIfDisposed();
 
                 return _positionInSuperStream - _startInSuperStream;
@@ -271,7 +266,7 @@ namespace System.IO.Compression
         }
     }
 
-    internal sealed class CheckSumAndSizeWriteStream : Stream
+    internal sealed partial class CheckSumAndSizeWriteStream : Stream
     {
         private readonly Stream _baseStream;
         private readonly Stream _baseBaseStream;
@@ -329,7 +324,6 @@ namespace System.IO.Compression
         {
             get
             {
-                Contract.Ensures(Contract.Result<long>() >= 0);
                 ThrowIfDisposed();
                 return _position;
             }
@@ -381,7 +375,6 @@ namespace System.IO.Compression
                 throw new ArgumentOutOfRangeException(nameof(count), SR.ArgumentNeedNonNegative);
             if ((buffer.Length - offset) < count)
                 throw new ArgumentException(SR.OffsetLengthInvalid);
-            Contract.EndContractBlock();
 
             // if we're not actually writing anything, we don't want to trigger as if we did write something
             ThrowIfDisposed();

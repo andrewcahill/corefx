@@ -43,22 +43,22 @@ namespace System.Collections.Tests
         public static void Get_InvalidIndex_ThrowsArgumentOutOfRangeException()
         {
             BitArray bitArray = new BitArray(4);
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Get(-1));
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Get(bitArray.Length));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Get(-1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Get(bitArray.Length));
 
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray[-1]);
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray[bitArray.Length]);
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray[-1]);
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray[bitArray.Length]);
         }
 
         [Fact]
         public static void Set_InvalidIndex_ThrowsArgumentOutOfRangeException()
         {
             BitArray bitArray = new BitArray(4);
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Set(-1, true));
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Set(bitArray.Length, true));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Set(-1, true));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Set(bitArray.Length, true));
 
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray[-1] = true);
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray[bitArray.Length] = true);
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray[-1] = true);
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray[bitArray.Length] = true);
         }
 
         [Theory]
@@ -139,7 +139,8 @@ namespace System.Collections.Tests
             Assert.Throws<InvalidOperationException>(() => enumerator.Current);
 
             // Has finished enumerating
-            while (enumerator.MoveNext()) ;
+            while (enumerator.MoveNext())
+                ;
             Assert.Throws<InvalidOperationException>(() => enumerator.Current);
 
             // Has resetted enumerating
@@ -191,8 +192,10 @@ namespace System.Collections.Tests
         [MemberData(nameof(Length_Set_Data))]
         public static void Length_Set(int originalSize, int newSize)
         {
-            BitArray bitArray = new BitArray(originalSize, true);
-            bitArray.Length = newSize;
+            BitArray bitArray = new BitArray(originalSize, true)
+            {
+                Length = newSize
+            };
             Assert.Equal(newSize, bitArray.Length);
             for (int i = 0; i < Math.Min(originalSize, bitArray.Length); i++)
             {
@@ -204,8 +207,8 @@ namespace System.Collections.Tests
                 Assert.False(bitArray[i]);
                 Assert.False(bitArray.Get(i));
             }
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray[newSize]);
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Get(newSize));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray[newSize]);
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray.Get(newSize));
 
             // Decrease then increase size
             bitArray.Length = 0;
@@ -236,7 +239,7 @@ namespace System.Collections.Tests
                 BitArray allFalse = new BitArray(Enumerable.Repeat(false, bitArraySize).ToArray());
                 BitArray alternating = new BitArray(Enumerable.Range(0, bitArraySize).Select(i => i % 2 == 1).ToArray());
 
-                foreach (var d in new[] { Tuple.Create(bitArraySize, 0),
+                foreach (Tuple<int, int> d in new[] { Tuple.Create(bitArraySize, 0),
                     Tuple.Create(bitArraySize * 2 + 1, 0),
                     Tuple.Create(bitArraySize * 2 + 1, bitArraySize + 1),
                     Tuple.Create(bitArraySize * 2 + 1, bitArraySize / 2 + 1) })
@@ -270,7 +273,7 @@ namespace System.Collections.Tests
                 BitArray allFalse = new BitArray(Enumerable.Repeat(false, bitArraySize).ToArray());
                 BitArray alternating = new BitArray(Enumerable.Range(0, bitArraySize).Select(i => i % 2 == 1).ToArray());
 
-                foreach (var d in new[] { Tuple.Create(bitArraySize, 0),
+                foreach (Tuple<int, int> d in new[] { Tuple.Create(bitArraySize, 0),
                     Tuple.Create(bitArraySize * 2 + 1, 0),
                     Tuple.Create(bitArraySize * 2 + 1, bitArraySize + 1),
                     Tuple.Create(bitArraySize * 2 + 1, bitArraySize / 2 + 1)})
@@ -313,9 +316,9 @@ namespace System.Collections.Tests
         public static void CopyTo_Type_Invalid()
         {
             ICollection bitArray = new BitArray(10);
-            Assert.Throws<ArgumentNullException>("array", () => bitArray.CopyTo(null, 0));
-            Assert.Throws<ArgumentException>(() => bitArray.CopyTo(new long[10], 0));
-            Assert.Throws<ArgumentException>(() => bitArray.CopyTo(new int[10, 10], 0));
+            AssertExtensions.Throws<ArgumentNullException>("array", () => bitArray.CopyTo(null, 0));
+            AssertExtensions.Throws<ArgumentException>("array", null, () => bitArray.CopyTo(new long[10], 0));
+            AssertExtensions.Throws<ArgumentException>("array", null, () => bitArray.CopyTo(new int[10, 10], 0));
         }
 
         [Theory]
@@ -337,14 +340,14 @@ namespace System.Collections.Tests
         {
             ICollection bitArray = new BitArray(bits);
             T[] array = (T[])Array.CreateInstance(typeof(T), arraySize);
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => bitArray.CopyTo(array, -1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => bitArray.CopyTo(array, -1));
             if (def is int)
             {
                 AssertExtensions.Throws<ArgumentException>("destinationArray", string.Empty, () => bitArray.CopyTo(array, index));
             }
             else
             {
-                Assert.Throws<ArgumentException>(null, () => bitArray.CopyTo(array, index));
+                AssertExtensions.Throws<ArgumentException>(null, () => bitArray.CopyTo(array, index));
             }
         }
 
@@ -364,14 +367,20 @@ namespace System.Collections.Tests
             BitArray setAll = new BitArray(BitsPerInt32 / 2 - 3, false);
             setAll.SetAll(true);
             yield return new object[] { "SetAll", setAll };
-            BitArray lengthShort = new BitArray(BitsPerInt32, true);
-            lengthShort.Length = BitsPerInt32 / 2 - 3;
+            BitArray lengthShort = new BitArray(BitsPerInt32, true)
+            {
+                Length = BitsPerInt32 / 2 - 3
+            };
             yield return new object[] { "Length-Short", lengthShort };
-            BitArray lengthLong = new BitArray(2 * BitsPerInt32, true);
-            lengthLong.Length = BitsPerInt32 - 3;
+            BitArray lengthLong = new BitArray(2 * BitsPerInt32, true)
+            {
+                Length = BitsPerInt32 - 3
+            };
             yield return new object[] { "Length-Long < 32", lengthLong };
-            BitArray lengthLong2 = new BitArray(2 * BitsPerInt32, true);
-            lengthLong2.Length = BitsPerInt32 + 3;
+            BitArray lengthLong2 = new BitArray(2 * BitsPerInt32, true)
+            {
+                Length = BitsPerInt32 + 3
+            };
             yield return new object[] { "Length-Long > 32", lengthLong2 };
             // alligned test cases
             yield return new object[] { "Aligned-Constructor", new BitArray(BitsPerInt32, true) };
@@ -418,7 +427,7 @@ namespace System.Collections.Tests
             ((ICollection)bits).CopyTo(data, 0);
 
             Assert.All(data, d => Assert.Equal(allBitsSet, d));
-            
+
         }
 
         [Theory]
@@ -427,7 +436,7 @@ namespace System.Collections.Tests
         public static void CopyTo_Byte_Hidden(string label, BitArray bits)
         {
             byte allBitsSet = (1 << BitsPerByte) - 1; // 8 bits set to 1 = 255
-            
+
             int fullBytes = bits.Length / BitsPerByte;
             int remainder = bits.Length % BitsPerByte;
             int arrayLength = fullBytes + (remainder > 0 ? 1 : 0);
@@ -458,7 +467,7 @@ namespace System.Collections.Tests
             ((ICollection)bits).CopyTo(data, 0);
 
             Assert.All(data, d => Assert.Equal(allBitsSet, d));
-            
+
         }
     }
 }

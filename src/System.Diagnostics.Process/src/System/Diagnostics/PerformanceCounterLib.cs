@@ -2,12 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+
+#if FEATURE_REGISTRY
 using Microsoft.Win32;
+#endif
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace System.Diagnostics
@@ -20,11 +23,11 @@ namespace System.Diagnostics
         private string _machineName;
         private string _perfLcid;
 
-        private static Dictionary<String, PerformanceCounterLib> s_libraryTable;
+        private static ConcurrentDictionary<(string machineName, string lcidString), PerformanceCounterLib> s_libraryTable;
         private Dictionary<int, string> _nameTable;
-        private readonly object _nameTableLock = new Object();
+        private readonly object _nameTableLock = new object();
 
-        private static Object s_internalSyncObject;
+        private static object s_internalSyncObject;
 
         internal PerformanceCounterLib(string machineName, string lcid)
         {
@@ -66,16 +69,9 @@ namespace System.Diagnostics
             else
                 machineName = machineName.ToLowerInvariant();
 
-            LazyInitializer.EnsureInitialized(ref s_libraryTable, ref s_internalSyncObject, () => new Dictionary<string, PerformanceCounterLib>());
+            LazyInitializer.EnsureInitialized(ref s_libraryTable, ref s_internalSyncObject, () => new ConcurrentDictionary<(string, string), PerformanceCounterLib>());
 
-            string libraryKey = machineName + ":" + lcidString;
-            PerformanceCounterLib library;
-            if (!PerformanceCounterLib.s_libraryTable.TryGetValue(libraryKey, out library))
-            {
-                library = new PerformanceCounterLib(machineName, lcidString);
-                PerformanceCounterLib.s_libraryTable[libraryKey] = library;
-            }
-            return library;
+            return PerformanceCounterLib.s_libraryTable.GetOrAdd((machineName, lcidString), (key) => new PerformanceCounterLib(key.machineName, key.lcidString));
         }
 
         internal byte[] GetPerformanceData(string item)
@@ -94,6 +90,7 @@ namespace System.Diagnostics
 
         private Dictionary<int, string> GetStringTable(bool isHelp)
         {
+#if FEATURE_REGISTRY
             Dictionary<int, string> stringTable;
             RegistryKey libraryKey;
 
@@ -187,11 +184,16 @@ namespace System.Diagnostics
             }
 
             return stringTable;
+#else
+            return new Dictionary<int, string>();
+#endif
         }
 
         internal class PerformanceMonitor
         {
+#if FEATURE_REGISTRY
             private RegistryKey _perfDataKey = null;
+#endif
             private string _machineName;
 
             internal PerformanceMonitor(string machineName)
@@ -202,7 +204,16 @@ namespace System.Diagnostics
 
             private void Init()
             {
-                _perfDataKey = Registry.PerformanceData;
+#if FEATURE_REGISTRY
+                if (ProcessManager.IsRemoteMachine(_machineName))
+                {
+                    _perfDataKey = RegistryKey.OpenRemoteBaseKey(RegistryHive.PerformanceData, _machineName);
+                }
+                else
+                {
+                    _perfDataKey = Registry.PerformanceData;
+                }
+#endif
             }
 
             // Win32 RegQueryValueEx for perf data could deadlock (for a Mutex) up to 2mins in some 
@@ -216,6 +227,7 @@ namespace System.Diagnostics
             // in this case with InvalidOperationException after the wait time expires.
             internal byte[] GetData(string item)
             {
+#if FEATURE_REGISTRY
                 int waitRetries = 17;   //2^16*10ms == approximately 10mins
                 int waitSleep = 0;
                 byte[] data = null;
@@ -237,9 +249,9 @@ namespace System.Diagnostics
                             case Interop.Errors.ERROR_INVALID_HANDLE:
                             case Interop.Advapi32.RPCStatus.RPC_S_SERVER_UNAVAILABLE:
                                 Init();
-                                goto case Interop.Advapi32.WaitOptions.WAIT_TIMEOUT;
+                                goto case Interop.Kernel32.WAIT_TIMEOUT;
 
-                            case Interop.Advapi32.WaitOptions.WAIT_TIMEOUT:
+                            case Interop.Kernel32.WAIT_TIMEOUT:
                             case Interop.Errors.ERROR_NOT_READY:
                             case Interop.Errors.ERROR_LOCK_FAILED:
                             case Interop.Errors.ERROR_BUSY:
@@ -266,6 +278,9 @@ namespace System.Diagnostics
                 }
 
                 throw new Win32Exception(error);
+#else
+                return Array.Empty<byte>();
+#endif
             }
         }
     }

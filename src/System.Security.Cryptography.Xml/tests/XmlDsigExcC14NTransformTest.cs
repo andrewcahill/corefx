@@ -1,3 +1,5 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// See the LICENSE file in the project root for more information
 //
 // XmlDsigExcC14NTransformTest.cs - Test Cases for XmlDsigExcC14NTransform
 //
@@ -280,14 +282,14 @@ namespace System.Security.Cryptography.Xml.Tests
         public void LoadInputWithUnsupportedType()
         {
             byte[] bad = { 0xBA, 0xD };
-            Assert.Throws<ArgumentException>(() => transform.LoadInput(bad));
+            AssertExtensions.Throws<ArgumentException>("obj", () => transform.LoadInput(bad));
         }
 
         [Fact]
         public void UnsupportedOutput()
         {
             XmlDocument doc = new XmlDocument();
-            Assert.Throws<ArgumentException>(() => transform.GetOutput(doc.GetType()));
+            AssertExtensions.Throws<ArgumentException>("type", () => transform.GetOutput(doc.GetType()));
         }
 
         [Fact]

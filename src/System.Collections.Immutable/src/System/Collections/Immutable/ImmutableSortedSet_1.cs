@@ -150,9 +150,25 @@ namespace System.Collections.Immutable
         {
             get
             {
+#if FEATURE_ITEMREFAPI
+                return _root.ItemRef(index);
+#else
                 return _root[index];
+#endif
             }
         }
+
+#if FEATURE_ITEMREFAPI
+        /// <summary>
+        /// Gets a read-only reference of the element of the set at the given index.
+        /// </summary>
+        /// <param name="index">The 0-based index of the element in the set to return.</param>
+        /// <returns>A read-only reference of the element at the given position.</returns>
+        public ref readonly T ItemRef(int index)
+        {
+            return ref _root.ItemRef(index);
+        }
+#endif
 
         #endregion
 
@@ -182,7 +198,6 @@ namespace System.Collections.Immutable
         [Pure]
         public ImmutableSortedSet<T> Add(T value)
         {
-            Requires.NotNullAllowStructs(value, nameof(value));
             Contract.Ensures(Contract.Result<ImmutableSortedSet<T>>() != null);
             bool mutated;
             return this.Wrap(_root.Add(value, _comparer, out mutated));
@@ -194,7 +209,6 @@ namespace System.Collections.Immutable
         [Pure]
         public ImmutableSortedSet<T> Remove(T value)
         {
-            Requires.NotNullAllowStructs(value, nameof(value));
             Contract.Ensures(Contract.Result<ImmutableSortedSet<T>>() != null);
             bool mutated;
             return this.Wrap(_root.Remove(value, _comparer, out mutated));
@@ -215,8 +229,6 @@ namespace System.Collections.Immutable
         [Pure]
         public bool TryGetValue(T equalValue, out T actualValue)
         {
-            Requires.NotNullAllowStructs(equalValue, nameof(equalValue));
-
             Node searchResult = _root.Search(equalValue, _comparer);
             if (searchResult.IsEmpty)
             {
@@ -593,7 +605,6 @@ namespace System.Collections.Immutable
         /// </returns>
         public int IndexOf(T item)
         {
-            Requires.NotNullAllowStructs(item, nameof(item));
             return _root.IndexOf(item, _comparer);
         }
 
@@ -606,7 +617,6 @@ namespace System.Collections.Immutable
         /// </summary>
         public bool Contains(T value)
         {
-            Requires.NotNullAllowStructs(value, nameof(value));
             return _root.Contains(value, _comparer);
         }
 
@@ -963,7 +973,9 @@ namespace System.Collections.Immutable
         [ExcludeFromCodeCoverage]
         IEnumerator<T> IEnumerable<T>.GetEnumerator()
         {
-            return this.GetEnumerator();
+            return this.IsEmpty ?
+                Enumerable.Empty<T>().GetEnumerator() :
+                this.GetEnumerator();
         }
 
         #endregion

@@ -19,11 +19,10 @@ namespace System.Collections.Concurrent
     /// <summary>
     /// Out-of-the-box partitioners are created with a set of default behaviors.  
     /// For example, by default, some form of buffering and chunking will be employed to achieve 
-    /// optimal performance in the common scenario where an IEnumerable<> implementation is fast and 
+    /// optimal performance in the common scenario where an <see cref="IEnumerable{T}"/> implementation is fast and 
     /// non-blocking.  These behaviors can be overridden via this enumeration.
     /// </summary>
     [Flags]
-    [Serializable]
     public enum EnumerablePartitionerOptions
     {
         /// <summary>
@@ -371,7 +370,7 @@ namespace System.Collections.Concurrent
             /// Abstract property, returns whether or not the shared reader has already read the last 
             /// element of the source data 
             /// </summary>
-            protected abstract bool HasNoElementsLeft { get; set; }
+            protected abstract bool HasNoElementsLeft { get; }
 
             /// <summary>
             /// Get the current element in the current partition. Property required by IEnumerator interface
@@ -382,7 +381,7 @@ namespace System.Collections.Concurrent
 
             /// <summary>
             /// Dispose is abstract, and depends on the type of the source data:
-            /// - For source data type IList and Array, the type of the shared reader is just the dataitself.
+            /// - For source data type IList and Array, the type of the shared reader is just the data itself.
             ///   We don't do anything in Dispose method for IList and Array. 
             /// - For source data type IEnumerable, the type of the shared reader is an enumerator we created.
             ///   Thus we need to dispose this shared reader enumerator, when there is no more active partitions
@@ -402,7 +401,7 @@ namespace System.Collections.Concurrent
             /// <summary>
             /// Get the current element in the current partition. Property required by IEnumerator interface
             /// </summary>
-            Object IEnumerator.Current
+            object IEnumerator.Current
             {
                 get
                 {
@@ -631,7 +630,6 @@ namespace System.Collections.Concurrent
                     return ((InternalPartitionEnumerable)this).GetEnumerator();
                 }
 
-#pragma warning disable 0420 // No warning for Interlocked.xxx if compiled with new managed compiler (Roslyn)
                 ///////////////////
                 //
                 // Used by GrabChunk_Buffered()
@@ -940,8 +938,11 @@ namespace System.Collections.Concurrent
                     {
                         _localList = new KeyValuePair<long, TSource>[_maxChunkSize];
                     }
+
+#pragma warning disable 0420 // TODO: https://github.com/dotnet/corefx/issues/35022
                     // make the actual call to the enumerable that grabs a chunk
                     return _enumerable.GrabChunk(_localList, requestedChunkSize, ref _currentChunkSize.Value);
+#pragma warning restore 0420
                 }
 
                 /// <summary>
@@ -956,14 +957,6 @@ namespace System.Collections.Concurrent
                 override protected bool HasNoElementsLeft
                 {
                     get { return _hasNoElementsLeft.Value; }
-                    set
-                    {
-                        //we only set it from false to true once
-                        //we should never set it back in any circumstances
-                        Debug.Assert(value);
-                        Debug.Assert(!_hasNoElementsLeft.Value);
-                        _hasNoElementsLeft.Value = true;
-                    }
                 }
 
                 override public KeyValuePair<long, TSource> Current
@@ -996,7 +989,6 @@ namespace System.Collections.Concurrent
                 }
             }
             #endregion
-#pragma warning restore 0420
         }
         #endregion
 
@@ -1162,10 +1154,6 @@ namespace System.Collections.Concurrent
                     Debug.Assert(_sharedIndex != null);
                     // use the new Volatile.Read method because it is cheaper than Interlocked.Read on AMD64 architecture
                     return Volatile.Read(ref _sharedIndex.Value) >= SourceCount - 1;
-                }
-                set
-                {
-                    Debug.Fail("HasNoElementsLeft_Set should not be called");
                 }
             }
 
@@ -1504,7 +1492,7 @@ namespace System.Collections.Concurrent
                 }
             }
 
-            Object IEnumerator.Current
+            object IEnumerator.Current
             {
                 get
                 {
@@ -1635,7 +1623,6 @@ namespace System.Collections.Concurrent
         /// <summary>
         /// A very simple primitive that allows us to share a value across multiple threads.
         /// </summary>
-        /// <typeparam name="TSource"></typeparam>
         private class SharedInt
         {
             internal volatile int Value;

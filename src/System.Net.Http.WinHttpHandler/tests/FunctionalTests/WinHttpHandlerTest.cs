@@ -16,8 +16,11 @@ using Xunit.Abstractions;
 // WinHttpHandler is a class and not a namespace and can't be part of namespace paths.
 namespace System.Net.Http.WinHttpHandlerFunctional.Tests
 {
+    using Configuration = System.Net.Test.Common.Configuration;
+
     // Note:  Disposing the HttpClient object automatically disposes the handler within. So, it is not necessary
     // to separately Dispose (or have a 'using' statement) for the handler.
+    [SkipOnTargetFramework(TargetFrameworkMonikers.Uap, "WinHttpHandler not supported on UAP")]
     public class WinHttpHandlerTest
     {
         // TODO: This is a placeholder until GitHub Issue #2383 gets resolved.
@@ -96,6 +99,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
             }
         }        
         
+        [ActiveIssue(17234)]
         [OuterLoop] // TODO: Issue #11345
         [Fact]
         [OuterLoop]
@@ -108,6 +112,25 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 
                 AggregateException ag = Assert.Throws<AggregateException>(() => t.Wait());
                 Assert.IsType<HttpRequestException>(ag.InnerException);
+            }
+        }
+
+        [Fact]
+        public async Task SendAsync_GetUsingChunkedEncoding_ThrowsHttpRequestException()
+        {
+            // WinHTTP doesn't support GET requests with a request body that uses
+            // chunked encoding. This test pins this behavior and verifies that the
+            // error handling is working correctly.
+            var server = new Uri("http://www.microsoft.com"); // No network I/O actually happens.
+            var request = new HttpRequestMessage(HttpMethod.Get, server);
+            request.Content = new StringContent("Request body");
+            request.Headers.TransferEncodingChunked = true;
+
+            var handler = new WinHttpHandler();
+            using (HttpClient client = new HttpClient(handler))
+            {
+                HttpRequestException ex = await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(request));
+                _output.WriteLine(ex.ToString());
             }
         }
 

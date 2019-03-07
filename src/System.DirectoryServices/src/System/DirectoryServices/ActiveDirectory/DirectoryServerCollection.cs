@@ -2,25 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Runtime.InteropServices;
+using System.Collections;
+using System.Diagnostics;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Collections;
-    using System.Globalization;
-    using System.Diagnostics;
-
     public class DirectoryServerCollection : CollectionBase
     {
-        internal string siteDN = null;
-        internal string transportDN = null;
-        internal DirectoryContext context = null;
+        internal readonly string siteDN = null;
+        internal readonly string transportDN = null;
+        internal readonly DirectoryContext context = null;
         internal bool initialized = false;
-        internal Hashtable changeList = null;
-        private ArrayList _copyList = new ArrayList();
-        private DirectoryEntry _crossRefEntry = null;
-        private bool _isADAM = false;
-        private bool _isForNC = false;
+        internal readonly Hashtable changeList = null;
+        private readonly ArrayList _copyList = new ArrayList();
+        private readonly DirectoryEntry _crossRefEntry = null;
+        private readonly bool _isADAM = false;
+        private readonly bool _isForNC = false;
 
         internal DirectoryServerCollection(DirectoryContext context, string siteDN, string transportName)
         {
@@ -47,28 +45,25 @@ namespace System.DirectoryServices.ActiveDirectory
 
         public DirectoryServer this[int index]
         {
-            get
-            {
-                return (DirectoryServer)InnerList[index];
-            }
+            get => (DirectoryServer)InnerList[index];
             set
             {
                 DirectoryServer server = (DirectoryServer)value;
 
                 if (server == null)
-                    throw new ArgumentNullException("value");
+                    throw new ArgumentNullException(nameof(value));
 
                 if (!Contains(server))
                     List[index] = server;
                 else
-                    throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , server), "value");
+                    throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , server), nameof(value));
             }
         }
 
         public int Add(DirectoryServer server)
         {
             if (server == null)
-                throw new ArgumentNullException("server");
+                throw new ArgumentNullException(nameof(server));
 
             // make sure that it is within the current site
             if (_isForNC)
@@ -76,13 +71,13 @@ namespace System.DirectoryServices.ActiveDirectory
                 if ((!_isADAM))
                 {
                     if (!(server is DomainController))
-                        throw new ArgumentException(SR.ServerShouldBeDC, "server");
+                        throw new ArgumentException(SR.ServerShouldBeDC, nameof(server));
 
                     // verify that the version >= 5.2
                     // DC should be Win 2003 or higher
                     if (((DomainController)server).NumericOSVersion < 5.2)
                     {
-                        throw new ArgumentException(SR.ServerShouldBeW2K3, "server");
+                        throw new ArgumentException(SR.ServerShouldBeW2K3, nameof(server));
                     }
                 }
 
@@ -92,7 +87,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 else
                 {
-                    throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , server), "server");
+                    throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , server), nameof(server));
                 }
             }
             else
@@ -107,20 +102,20 @@ namespace System.DirectoryServices.ActiveDirectory
                 if (!Contains(server))
                     return List.Add(server);
                 else
-                    throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , server), "server");
+                    throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , server), nameof(server));
             }
         }
 
         public void AddRange(DirectoryServer[] servers)
         {
             if (servers == null)
-                throw new ArgumentNullException("servers");
+                throw new ArgumentNullException(nameof(servers));
 
             foreach (DirectoryServer s in servers)
             {
                 if (s == null)
                 {
-                    throw new ArgumentException("servers");
+                    throw new ArgumentException(nameof(servers));
                 }
             }
 
@@ -131,7 +126,7 @@ namespace System.DirectoryServices.ActiveDirectory
         public bool Contains(DirectoryServer server)
         {
             if (server == null)
-                throw new ArgumentNullException("server");
+                throw new ArgumentNullException(nameof(server));
 
             for (int i = 0; i < InnerList.Count; i++)
             {
@@ -153,7 +148,7 @@ namespace System.DirectoryServices.ActiveDirectory
         public int IndexOf(DirectoryServer server)
         {
             if (server == null)
-                throw new ArgumentNullException("server");
+                throw new ArgumentNullException(nameof(server));
 
             for (int i = 0; i < InnerList.Count; i++)
             {
@@ -170,20 +165,20 @@ namespace System.DirectoryServices.ActiveDirectory
         public void Insert(int index, DirectoryServer server)
         {
             if (server == null)
-                throw new ArgumentNullException("server");
+                throw new ArgumentNullException(nameof(server));
 
             if (_isForNC)
             {
                 if ((!_isADAM))
                 {
                     if (!(server is DomainController))
-                        throw new ArgumentException(SR.ServerShouldBeDC, "server");
+                        throw new ArgumentException(SR.ServerShouldBeDC, nameof(server));
 
                     // verify that the version >= 5.2
                     // DC should be Win 2003 or higher
                     if (((DomainController)server).NumericOSVersion < 5.2)
                     {
-                        throw new ArgumentException(SR.ServerShouldBeW2K3, "server");
+                        throw new ArgumentException(SR.ServerShouldBeW2K3, nameof(server));
                     }
                 }
 
@@ -193,7 +188,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 else
                 {
-                    throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , server), "server");
+                    throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , server), nameof(server));
                 }
             }
             else
@@ -203,20 +198,20 @@ namespace System.DirectoryServices.ActiveDirectory
                 Debug.Assert(siteName != null);
                 if (Utils.Compare(siteDN, siteName) != 0)
                 {
-                    throw new ArgumentException(SR.NotWithinSite, "server");
+                    throw new ArgumentException(SR.NotWithinSite, nameof(server));
                 }
 
                 if (!Contains(server))
                     List.Insert(index, server);
                 else
-                    throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.AlreadyExistingInCollection , server));
+                    throw new ArgumentException(SR.Format(SR.AlreadyExistingInCollection , server));
             }
         }
 
         public void Remove(DirectoryServer server)
         {
             if (server == null)
-                throw new ArgumentNullException("server");
+                throw new ArgumentNullException(nameof(server));
 
             for (int i = 0; i < InnerList.Count; i++)
             {
@@ -230,7 +225,7 @@ namespace System.DirectoryServices.ActiveDirectory
             }
 
             // something that does not exist in the collection
-            throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.NotFoundInCollection , server), "server");
+            throw new ArgumentException(SR.Format(SR.NotFoundInCollection , server), nameof(server));
         }
 
         protected override void OnClear()
@@ -369,9 +364,9 @@ namespace System.DirectoryServices.ActiveDirectory
             OnInsertComplete(index, newValue);
         }
 
-        protected override void OnValidate(Object value)
+        protected override void OnValidate(object value)
         {
-            if (value == null) throw new ArgumentNullException("value");
+            if (value == null) throw new ArgumentNullException(nameof(value));
 
             if (_isForNC)
             {
@@ -379,19 +374,19 @@ namespace System.DirectoryServices.ActiveDirectory
                 {
                     // for adam this should be an ADAMInstance
                     if (!(value is AdamInstance))
-                        throw new ArgumentException(SR.ServerShouldBeAI, "value");
+                        throw new ArgumentException(SR.ServerShouldBeAI, nameof(value));
                 }
                 else
                 {
                     // for AD this should be a DomainController
                     if (!(value is DomainController))
-                        throw new ArgumentException(SR.ServerShouldBeDC, "value");
+                        throw new ArgumentException(SR.ServerShouldBeDC, nameof(value));
                 }
             }
             else
             {
                 if (!(value is DirectoryServer))
-                    throw new ArgumentException("value");
+                    throw new ArgumentException(nameof(value));
             }
         }
 

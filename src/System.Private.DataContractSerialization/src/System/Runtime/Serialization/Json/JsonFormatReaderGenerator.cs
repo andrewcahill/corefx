@@ -256,8 +256,24 @@ namespace System.Runtime.Serialization.Json
                 }
             }
 
+            bool HasFactoryMethod(ClassDataContract classContract)
+            {
+                return Globals.TypeOfIObjectReference.IsAssignableFrom(classContract.UnderlyingType);
+            }
+
             private bool InvokeFactoryMethod(ClassDataContract classContract)
             {
+                if (HasFactoryMethod(classContract))
+                {
+                    _ilg.Load(_contextArg);
+                    _ilg.LoadAddress(_objectLocal);
+                    _ilg.ConvertAddress(_objectLocal.LocalType, Globals.TypeOfIObjectReference);
+                    _ilg.Load(Globals.NewObjectId);
+                    _ilg.Call(XmlFormatGeneratorStatics.GetRealObjectMethod);
+                    _ilg.ConvertValue(Globals.TypeOfObject, _ilg.CurrentMethod.ReturnType);
+                    return true;
+                }
+
                 return false;
             }
 
@@ -358,6 +374,7 @@ namespace System.Runtime.Serialization.Json
                     }
                     else
                     {
+                        _ilg.Call(_contextArg, XmlFormatGeneratorStatics.ResetCollectionMemberInfoMethod);
                         value = ReadValue(memberType, dataMember.Name);
                         _ilg.LoadAddress(_objectLocal);
                         _ilg.ConvertAddress(_objectLocal.LocalType, _objectType);
@@ -635,7 +652,7 @@ namespace System.Runtime.Serialization.Json
                     _ilg.Stloc(growingCollection);
                 }
                 LocalBuilder i = _ilg.DeclareLocal(Globals.TypeOfInt, "i");
-                object forLoop = _ilg.For(i, 0, Int32.MaxValue);
+                object forLoop = _ilg.For(i, 0, int.MaxValue);
                 // Empty namespace
                 IsStartElement(_memberNamesArg, _emptyDictionaryStringArg);
                 _ilg.If();
@@ -766,7 +783,7 @@ namespace System.Runtime.Serialization.Json
                         pairKey = pairKeyNullable;
                     }
 
-                    LocalBuilder pairValue = ReadValue(valueType, String.Empty);
+                    LocalBuilder pairValue = ReadValue(valueType, string.Empty);
                     StoreKeyValuePair(_objectLocal, collectionContract, pairKey, pairValue);
 
                     _ilg.EndWhile();
@@ -827,7 +844,7 @@ namespace System.Runtime.Serialization.Json
                 }
 
                 LocalBuilder i = _ilg.DeclareLocal(Globals.TypeOfInt, "i");
-                object forLoop = _ilg.For(i, 0, Int32.MaxValue);
+                object forLoop = _ilg.For(i, 0, int.MaxValue);
                 IsStartElement(_memberNamesArg, _emptyDictionaryStringArg);
                 _ilg.If();
                 _ilg.Call(_contextArg, XmlFormatGeneratorStatics.IncrementItemCountMethod, 1);

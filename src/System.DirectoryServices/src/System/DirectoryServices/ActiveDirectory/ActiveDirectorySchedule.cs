@@ -2,15 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.ComponentModel;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Collections;
-    using System.DirectoryServices;
-    using System.Globalization;
-    using System.ComponentModel;
-
     public enum HourOfDay
     {
         Zero,
@@ -50,8 +45,8 @@ namespace System.DirectoryServices.ActiveDirectory
     public class ActiveDirectorySchedule
     {
         // 24*7*4 = 672
-        private bool[] _scheduleArray = new bool[672];
-        private long _utcOffSet = 0;
+        private readonly bool[] _scheduleArray = new bool[672];
+        private readonly long _utcOffSet = 0;
 
         public ActiveDirectorySchedule()
         {
@@ -91,7 +86,7 @@ namespace System.DirectoryServices.ActiveDirectory
             set
             {
                 if (value == null)
-                    throw new ArgumentNullException("value");
+                    throw new ArgumentNullException(nameof(value));
 
                 ValidateRawArray(value);
 
@@ -105,19 +100,19 @@ namespace System.DirectoryServices.ActiveDirectory
         public void SetSchedule(DayOfWeek day, HourOfDay fromHour, MinuteOfHour fromMinute, HourOfDay toHour, MinuteOfHour toMinute)
         {
             if (day < DayOfWeek.Sunday || day > DayOfWeek.Saturday)
-                throw new InvalidEnumArgumentException("day", (int)day, typeof(DayOfWeek));
+                throw new InvalidEnumArgumentException(nameof(day), (int)day, typeof(DayOfWeek));
 
             if (fromHour < HourOfDay.Zero || fromHour > HourOfDay.TwentyThree)
-                throw new InvalidEnumArgumentException("fromHour", (int)fromHour, typeof(HourOfDay));
+                throw new InvalidEnumArgumentException(nameof(fromHour), (int)fromHour, typeof(HourOfDay));
 
             if (fromMinute != MinuteOfHour.Zero && fromMinute != MinuteOfHour.Fifteen && fromMinute != MinuteOfHour.Thirty && fromMinute != MinuteOfHour.FortyFive)
-                throw new InvalidEnumArgumentException("fromMinute", (int)fromMinute, typeof(MinuteOfHour));
+                throw new InvalidEnumArgumentException(nameof(fromMinute), (int)fromMinute, typeof(MinuteOfHour));
 
             if (toHour < HourOfDay.Zero || toHour > HourOfDay.TwentyThree)
-                throw new InvalidEnumArgumentException("toHour", (int)toHour, typeof(HourOfDay));
+                throw new InvalidEnumArgumentException(nameof(toHour), (int)toHour, typeof(HourOfDay));
 
             if (toMinute != MinuteOfHour.Zero && toMinute != MinuteOfHour.Fifteen && toMinute != MinuteOfHour.Thirty && toMinute != MinuteOfHour.FortyFive)
-                throw new InvalidEnumArgumentException("toMinute", (int)toMinute, typeof(MinuteOfHour));
+                throw new InvalidEnumArgumentException(nameof(toMinute), (int)toMinute, typeof(MinuteOfHour));
 
             // end time should be later than the start time
             if ((int)fromHour * 60 + (int)fromMinute > (int)toHour * 60 + (int)toMinute)
@@ -133,12 +128,12 @@ namespace System.DirectoryServices.ActiveDirectory
         public void SetSchedule(DayOfWeek[] days, HourOfDay fromHour, MinuteOfHour fromMinute, HourOfDay toHour, MinuteOfHour toMinute)
         {
             if (days == null)
-                throw new ArgumentNullException("days");
+                throw new ArgumentNullException(nameof(days));
 
             for (int i = 0; i < days.Length; i++)
             {
                 if (days[i] < DayOfWeek.Sunday || days[i] > DayOfWeek.Saturday)
-                    throw new InvalidEnumArgumentException("days", (int)days[i], typeof(DayOfWeek));
+                    throw new InvalidEnumArgumentException(nameof(days), (int)days[i], typeof(DayOfWeek));
             }
 
             for (int i = 0; i < days.Length; i++)

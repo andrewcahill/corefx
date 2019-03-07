@@ -33,7 +33,7 @@ namespace System.Linq.Tests
         [Fact]
         public void SameResultsRepeatCallsStringQueryAppend()
         {
-            var q1 = from x1 in new[] { "AAA", String.Empty, "q", "C", "#", "!@#$%^", "0987654321", "Calling Twice" }
+            var q1 = from x1 in new[] { "AAA", string.Empty, "q", "C", "#", "!@#$%^", "0987654321", "Calling Twice" }
                      select x1;
 
             Assert.Equal(q1.Append("hi"), q1.Append("hi"));
@@ -43,7 +43,7 @@ namespace System.Linq.Tests
         [Fact]
         public void SameResultsRepeatCallsStringQueryPrepend()
         {
-            var q1 = from x1 in new[] { "AAA", String.Empty, "q", "C", "#", "!@#$%^", "0987654321", "Calling Twice" }
+            var q1 = from x1 in new[] { "AAA", string.Empty, "q", "C", "#", "!@#$%^", "0987654321", "Calling Twice" }
                      select x1;
 
             Assert.Equal(q1.Prepend("hi"), q1.Prepend("hi"));
@@ -114,8 +114,8 @@ namespace System.Linq.Tests
         [Fact]
         public void SourceNull()
         {
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Append(1));
-            Assert.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Prepend(1));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Append(1));
+            AssertExtensions.Throws<ArgumentNullException>("source", () => ((IEnumerable<int>)null).Prepend(1));
         }
 
         [Fact]

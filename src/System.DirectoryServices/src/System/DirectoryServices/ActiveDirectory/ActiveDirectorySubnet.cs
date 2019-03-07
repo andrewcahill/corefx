@@ -2,20 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Runtime.InteropServices;
+using System.Diagnostics;
+
 namespace System.DirectoryServices.ActiveDirectory
 {
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Collections;
-    using System.Globalization;
-    using System.Diagnostics;
-    using System.Security.Permissions;
-
     public class ActiveDirectorySubnet : IDisposable
     {
         private ActiveDirectorySite _site = null;
-        private string _name = null;
-        internal DirectoryContext context = null;
+        private readonly string _name = null;
+        internal readonly DirectoryContext context = null;
         private bool _disposed = false;
 
         internal bool existing = false;
@@ -45,7 +41,7 @@ namespace System.DirectoryServices.ActiveDirectory
             catch (ActiveDirectoryObjectNotFoundException)
             {
                 // this is the case where the context is a config set and we could not find an ADAM instance in that config set
-                throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.ADAMInstanceNotFoundInConfigSet , context.Name));
+                throw new ActiveDirectoryOperationException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet , context.Name));
             }
 
             try
@@ -144,7 +140,7 @@ namespace System.DirectoryServices.ActiveDirectory
             catch (ActiveDirectoryObjectNotFoundException)
             {
                 // this is the case where the context is a config set and we could not find an ADAM instance in that config set
-                throw new ActiveDirectoryOperationException(String.Format(CultureInfo.CurrentCulture, SR.ADAMInstanceNotFoundInConfigSet , context.Name));
+                throw new ActiveDirectoryOperationException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet , context.Name));
             }
             finally
             {
@@ -156,10 +152,10 @@ namespace System.DirectoryServices.ActiveDirectory
         public ActiveDirectorySubnet(DirectoryContext context, string subnetName, string siteName) : this(context, subnetName)
         {
             if (siteName == null)
-                throw new ArgumentNullException("siteName");
+                throw new ArgumentNullException(nameof(siteName));
 
             if (siteName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "siteName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(siteName));
 
             // validate that siteName is valid
             try
@@ -168,7 +164,7 @@ namespace System.DirectoryServices.ActiveDirectory
             }
             catch (ActiveDirectoryObjectNotFoundException)
             {
-                throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.SiteNotExist , siteName), "siteName");
+                throw new ArgumentException(SR.Format(SR.SiteNotExist , siteName), nameof(siteName));
             }
         }
 
@@ -187,7 +183,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
                 catch (ActiveDirectoryObjectNotFoundException)
                 {
-                    throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, SR.SiteNotExist , siteName), "siteName");
+                    throw new ArgumentException(SR.Format(SR.SiteNotExist , siteName), nameof(siteName));
                 }
             }
 
@@ -223,7 +219,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 {
                     // check whether the site exists or not, you can not create a new site and set it to a subnet object with commit change to site object first
                     if (!value.existing)
-                        throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, SR.SiteNotCommitted , value));
+                        throw new InvalidOperationException(SR.Format(SR.SiteNotCommitted , value));
                 }
 
                 _site = value;
@@ -383,12 +379,12 @@ namespace System.DirectoryServices.ActiveDirectory
         {
             // basic validation first
             if (context == null)
-                throw new ArgumentNullException("context");
+                throw new ArgumentNullException(nameof(context));
 
             // if target is not specified, then we determin the target from the logon credential, so if it is a local user context, it should fail
             if ((context.Name == null) && (!context.isRootDomain()))
             {
-                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, "context");
+                throw new ArgumentException(SR.ContextNotAssociatedWithDomain, nameof(context));
             }
 
             // more validation for the context, if the target is not null, then it should be either forest name or server name
@@ -396,14 +392,14 @@ namespace System.DirectoryServices.ActiveDirectory
             {
                 // we only allow target to be forest, server name or ADAM config set
                 if (!(context.isRootDomain() || context.isServer() || context.isADAMConfigSet()))
-                    throw new ArgumentException(SR.NotADOrADAM, "context");
+                    throw new ArgumentException(SR.NotADOrADAM, nameof(context));
             }
 
             if (subnetName == null)
-                throw new ArgumentNullException("subnetName");
+                throw new ArgumentNullException(nameof(subnetName));
 
             if (subnetName.Length == 0)
-                throw new ArgumentException(SR.EmptyStringParameter, "subnetName");
+                throw new ArgumentException(SR.EmptyStringParameter, nameof(subnetName));
         }
     }
 }

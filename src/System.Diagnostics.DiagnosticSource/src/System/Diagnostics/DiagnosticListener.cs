@@ -5,12 +5,6 @@
 using System.Threading;
 using System.Collections.Generic;
 
-// TODO when we upgrade to C# V6 you can remove this.  
-// warning CS0420: 'P.x': a reference to a volatile field will not be treated as volatile
-// This happens when you pass a _subcribers (a volatile field) to interlocked operations (which are byref). 
-// This was fixed in C# V6.  
-#pragma warning disable 0420
-
 namespace System.Diagnostics
 {
     /// <summary>
@@ -42,6 +36,10 @@ namespace System.Diagnostics
         {
             get
             {
+#if ENABLE_HTTP_HANDLER
+                GC.KeepAlive(HttpHandlerDiagnosticListener.s_instance);
+#endif
+
                 if (s_allListenerObservable == null)
                 {
                     s_allListenerObservable = new AllListenerObservable();
@@ -52,33 +50,74 @@ namespace System.Diagnostics
 
         // Subscription implementation 
         /// <summary>
-        /// Add a subscriber (Observer).  If 'IsEnabled' == null (or not present), then the Source's IsEnabled 
-        /// will always return true.  
+        /// Add a subscriber (Observer).  If the isEnabled parameter is non-null it indicates that some events are 
+        /// uninteresting and can be skipped for efficiency.  
         /// </summary>
+        /// <param name="observer">Subscriber (IObserver)</param>
+        /// <param name="isEnabled">Filters events based on their name (string). Should return true if the event is enabled.  
+        /// 
+        /// Note that the isEnabled predicate is an OPTIONAL OPTIMIZATION to allow the instrumentation site to avoid 
+        /// setting up the payload and calling 'Write' when no subscriber cares about it. In particular the 
+        /// instrumentation site has the option of ignoring the IsEnabled() predicate (not calling it) and simply
+        /// calling Write().   Thus if the subscriber requires the filtering, it needs to do it itself. 
+        /// 
+        /// If this parameter is null, no filtering is done (all overloads of DiagnosticSource.IsEnabled return true).   
+        /// </param>
         public virtual IDisposable Subscribe(IObserver<KeyValuePair<string, object>> observer, Predicate<string> isEnabled)
         {
-            return SubscribeInternal(observer, isEnabled, (name, arg1, arg2) => isEnabled(name));
+            IDisposable subscription;
+            if (isEnabled == null)
+            {
+                subscription = SubscribeInternal(observer, null, null);
+            }
+            else
+            {
+                Predicate<string> localIsEnabled = isEnabled;
+                subscription = SubscribeInternal(observer, isEnabled, (name, arg1, arg2) => localIsEnabled(name));
+            }
+
+            return subscription;
         }
 
         /// <summary>
-        /// Add a subscriber (Observer).  If 'IsEnabled' == null (or not present), then the Source's IsEnabled 
-        /// will always return true.  
+        /// Add a subscriber (Observer).  If the isEnabled parameter is non-null indicates that some events are 
+        /// uninteresting can be skipped for efficiency.  
         /// </summary>
         /// <param name="observer">Subscriber (IObserver)</param>
-        /// <param name="isEnabled">Filters events based on their name (string) and context objects that could be null.
-        /// Note that producer may first call filter with event name only and null context arguments and filter should
-        /// return true if consumer is interested in any of such events. Producers that support 
-        /// context-based filtering will invoke isEnabled again with context for more prcise filtering.
-        /// Use Subscribe overload with name-based filtering if producer does NOT support context-based filtering</param>
+        /// <param name="isEnabled">Filters events based on their name (string) and up to two context object (which can be null).  
+        /// 
+        /// A particular instrumentation site HAS THE OPTION of calling one or more 'IsEnabled' overloads  in which
+        /// it passes the name of the event and up to two other (instrumentation site specific) objects as arguments.
+        /// If any of these 'IsEnabled' calls are made then this 'isEnabled' predicate is invoked with passed values
+        /// (if shorter overloads are used, null is passed for missing context objects).   
+        /// 
+        /// This gives any particular instrumentation site the ability to pass up to two pieces of information to the 
+        /// subscriber to do sophisticated, efficient filtering.  This requires more coupling between the instrumentation
+        /// site and the subscriber code.  
+        /// 
+        /// It IS expected that a particular instrumentation site may call different overloads of IsEnabled for the 
+        /// same event, first calling IsEnable(string) which calls the filter with two null context objects and if
+        /// 'isEnabled' returns true calling again with context objects.   The isEnabled filter should be designed 
+        /// with this in mind. 
+        /// 
+        /// Note that the isEnabled predicate is an OPTIONAL OPTIMIZATION to allow the instrumentation site to avoid 
+        /// setting up the payload and calling 'Write' when no subscriber cares about it. In particular the 
+        /// instrumentation site has the option of ignoring the IsEnabled() predicate (not calling it) and simply
+        /// calling Write().   Thus if the subscriber requires the filtering, it needs to do it itself.  
+        /// 
+        /// If this parameter is null, no filtering is done (all overloads of DiagnosticSource.IsEnabled return true).   
+        /// </param>
         public virtual IDisposable Subscribe(IObserver<KeyValuePair<string, object>> observer, Func<string, object, object, bool> isEnabled)
         {
-            return SubscribeInternal(observer, name => IsEnabled(name, null, null), isEnabled);
+            return isEnabled == null ?
+             SubscribeInternal(observer, null, null) :
+             SubscribeInternal(observer, name => IsEnabled(name, null, null), isEnabled);
         }
 
         /// <summary>
         /// Same as other Subscribe overload where the predicate is assumed to always return true.  
         /// </summary>
-        public IDisposable Subscribe(IObserver<KeyValuePair<string, object>> observer)
+        public virtual IDisposable Subscribe(IObserver<KeyValuePair<string, object>> observer)
         {
             return SubscribeInternal(observer, null, null);
         }
@@ -107,9 +146,9 @@ namespace System.Diagnostics
                 s_allListeners = this;
             }
 
-            // Call IsEnabled just so we insure that the DiagnosticSourceEventSource has been 
-            // constructed (and thus is responsive to ETW requests to be enabled).  
-            DiagnosticSourceEventSource.Logger.IsEnabled();
+            // Touch DiagnosticSourceEventSource.Logger so we ensure that the
+            // DiagnosticSourceEventSource has been constructed (and thus is responsive to ETW requests to be enabled).
+            GC.KeepAlive(DiagnosticSourceEventSource.Logger);
         }
 
         /// <summary>

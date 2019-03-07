@@ -9,7 +9,7 @@ using Xunit;
 
 namespace System.Tests
 {
-    public static partial class ArrayTests
+    public partial class ArrayTests
     {
         public static IEnumerable<object[]> Fill_Generic_TestData()
         {
@@ -49,6 +49,7 @@ namespace System.Tests
             yield return new object[] { transformed, repeatedValue, 0, count / 2 }; // Fill the beginning of the array.
             yield return new object[] { transformed, repeatedValue, count / 2, count / 2 }; // Fill the end of the array, assuming `length` is even.
             yield return new object[] { transformed, repeatedValue, count / 4, count / 2 }; // Fill the middle of the array.
+            yield return new object[] { transformed, repeatedValue, count, 0 }; // Fill nothing.
         }
 
         [Theory]
@@ -77,6 +78,33 @@ namespace System.Tests
                 Assert.Equal(Enumerable.Repeat(value, count), array.Skip(startIndex).Take(count));
                 Assert.Equal(after, array.Skip(startIndex + count));
             }
+        }
+
+        [Fact]
+        public void Fill_NullArray_ThrowsArgumentNullException()
+        {
+            AssertExtensions.Throws<ArgumentNullException>("array", () => Array.Fill(null, 1));
+            AssertExtensions.Throws<ArgumentNullException>("array", () => Array.Fill(null, 1, 0, 0));
+        }
+
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(2)]
+        public void Fill_InvalidStartIndex_ThrowsArgumentOutOfRangeException(int startIndex)
+        {
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("startIndex", () => Array.Fill(new string[1], "", startIndex, 0));
+        }
+
+        [Theory]
+        [InlineData(1, 0, -1)]
+        [InlineData(0, 0, 1)]
+        [InlineData(3, 3, 1)]
+        [InlineData(3, 2, 2)]
+        [InlineData(3, 1, 3)]
+        [InlineData(3, 0, 4)]
+        public void Fill_InvalidStartIndexCount_ThrowsArgumentOutOfRangeException(int arrayLength, int startIndex, int count)
+        {
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("count", () => Array.Fill(new string[arrayLength], "", startIndex, count));
         }
 
         public static IEnumerable<object[]> Reverse_Generic_Int_TestData()
@@ -112,20 +140,20 @@ namespace System.Tests
         [Fact]
         public static void Reverse_Generic_NullArray_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>("array", () => Array.Reverse((string[])null));
-            Assert.Throws<ArgumentNullException>("array", () => Array.Reverse((string[])null, 0, 0));
+            AssertExtensions.Throws<ArgumentNullException>("array", () => Array.Reverse((string[])null));
+            AssertExtensions.Throws<ArgumentNullException>("array", () => Array.Reverse((string[])null, 0, 0));
         }
 
         [Fact]
         public static void Reverse_Generic_NegativeIndex_ThrowsArgumentOutOfRangeException()
         {
-            Assert.Throws<ArgumentOutOfRangeException>("index", () => Array.Reverse(new string[0], -1, 0));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("index", () => Array.Reverse(new string[0], -1, 0));
         }
 
         [Fact]
         public static void Reverse_Generic_NegativeLength_ThrowsArgumentOutOfRangeException()
         {
-            Assert.Throws<ArgumentOutOfRangeException>("length", () => Array.Reverse(new string[0], 0, -1));
+            AssertExtensions.Throws<ArgumentOutOfRangeException>("length", () => Array.Reverse(new string[0], 0, -1));
         }
 
         [Theory]
@@ -137,15 +165,32 @@ namespace System.Tests
         [InlineData(3, 0, 4)]
         public static void Reverse_Generic_InvalidOffsetPlusLength_ThrowsArgumentException(int arrayLength, int index, int length)
         {
-            Assert.Throws<ArgumentException>(null, () => Array.Reverse(new string[arrayLength], index, length));
+            AssertExtensions.Throws<ArgumentException>(null, () => Array.Reverse(new string[arrayLength], index, length));
         }
 
         [Fact]
-        public static void CreateInstance_TypeNotRuntimeType_ThrowsArgumentException()
+        public static void Reverse_NonSZArrayWithMinValueLowerBound()
         {
-            Assert.Throws<ArgumentException>("elementType", () => Array.CreateInstance(Helpers.NonRuntimeType(), 0));
-            Assert.Throws<ArgumentException>("elementType", () => Array.CreateInstance(Helpers.NonRuntimeType(), new int[1]));
-            Assert.Throws<ArgumentException>("elementType", () => Array.CreateInstance(Helpers.NonRuntimeType(), new int[1], new int[1]));
+            Array array = NonZeroLowerBoundArray(new int[] { 1, 2, 3 }, int.MinValue);
+
+            Reverse(array, int.MinValue, 0, new int[] { 1, 2, 3 });
+            Reverse(array, int.MinValue, 1, new int[] { 1, 2, 3 });
+            Reverse(array, int.MinValue, 2, new int[] { 2, 1, 3 });
+        }
+
+        [Fact]
+        public void CreateInstance_TypeNotRuntimeType_ThrowsArgumentException()
+        {
+            // This cannot be a [Theory] due to https://github.com/xunit/xunit/issues/1325.
+            foreach (Type elementType in Helpers.NonRuntimeTypes)
+            {
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, 1));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, 1, 1));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, 1, 1, 1));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, new int[1]));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, new long[1]));
+                AssertExtensions.Throws<ArgumentException>("elementType", () => Array.CreateInstance(elementType, new int[1], new int[1]));
+            }
         }
     }
 }

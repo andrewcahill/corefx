@@ -2,11 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-
-//------------------------------------------------------------------------------
-
+using System.Data.SqlClient;
 using System.Security.Principal;
-
 
 namespace System.Data.ProviderBase
 {
@@ -16,12 +13,18 @@ namespace System.Data.ProviderBase
 
         internal static DbConnectionPoolIdentity GetCurrent()
         {
+            return TdsParserStateObjectFactory.UseManagedSNI ? GetCurrentManaged() : GetCurrentNative();
+        }
+
+        private static DbConnectionPoolIdentity GetCurrentNative()
+        {
             DbConnectionPoolIdentity current;
             using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
             {
                 IntPtr token = identity.AccessToken.DangerousGetHandle();
-                bool isNetwork = identity.User.IsWellKnown(WellKnownSidType.NetworkSid);
-                string sidString = identity.User.Value;
+                SecurityIdentifier user = identity.User;
+                bool isNetwork = user.IsWellKnown(WellKnownSidType.NetworkSid);
+                string sidString = user.Value;
 
                 // Win32NativeMethods.IsTokenRestricted will raise exception if the native call fails
                 bool isRestricted = Win32NativeMethods.IsTokenRestrictedWrapper(token);

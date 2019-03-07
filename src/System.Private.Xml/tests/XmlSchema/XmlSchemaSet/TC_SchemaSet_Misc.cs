@@ -19,9 +19,7 @@ namespace System.Xml.Tests
         {
             _output = output;
         }
-
-
-        //todo: use rootpath
+        
         public bool bWarningCallback;
 
         public bool bErrorCallback;
@@ -74,7 +72,7 @@ namespace System.Xml.Tests
             }
         }
 
-        //[Variation(Desc = "v2 - Bug115049 - XSD: content model validation for an invalid root element should be adandoned", Priority = 2)]
+        //[Variation(Desc = "v2 - Bug115049 - XSD: content model validation for an invalid root element should be abandoned", Priority = 2)]
         [InlineData()]
         [Theory]
         public void v2()
@@ -685,7 +683,7 @@ namespace System.Xml.Tests
             return;
         }
 
-        //[Variation(Desc = "v109 - 386243, Adding a chameleon schema agsinst to no namaespace throws unexpected warnings", Priority = 1)]
+        //[Variation(Desc = "v109 - 386243, Adding a chameleon schema against to no namespace throws unexpected warnings", Priority = 1)]
         [InlineData()]
         [Theory]
         public void v109()
@@ -837,11 +835,11 @@ namespace System.Xml.Tests
         {
 #pragma warning disable 0618
             XmlSchemaAttribute attribute = new XmlSchemaAttribute();
-            Object attributeType = attribute.AttributeType;
+            object attributeType = attribute.AttributeType;
             XmlSchemaElement element = new XmlSchemaElement();
-            Object elementType = element.ElementType;
+            object elementType = element.ElementType;
             XmlSchemaType schemaType = new XmlSchemaType();
-            Object BaseSchemaType = schemaType.BaseSchemaType;
+            object BaseSchemaType = schemaType.BaseSchemaType;
 #pragma warning restore 0618
         }
 
@@ -930,7 +928,7 @@ namespace System.Xml.Tests
                     }
                     catch (XmlSchemaValidationException ex)
                     {
-                        if (ex.LineNumber == 1 && ex.LinePosition == 2 && !String.IsNullOrEmpty(ex.SourceUri))
+                        if (ex.LineNumber == 1 && ex.LinePosition == 2 && !string.IsNullOrEmpty(ex.SourceUri))
                         {
                             return;
                         }
@@ -1070,6 +1068,9 @@ namespace System.Xml.Tests
             return;
         }
 
+        // Test failure on ILC: Test depends on Xml Serialization and requires reflection on a LOT of types under System.Xml.Schema namespace.
+        // Rd.xml with "<Namespace Name="System.Xml.Schema" Dynamic="Required Public" />" lets this test pass but we should probably be
+        // fixing up XmlSerializer's own rd.xml rather than the test here.
         [Fact]
         public void GetBuiltinSimpleTypeWorksAsEcpected()
         {
@@ -1258,7 +1259,10 @@ namespace System.Xml.Tests
                 CError.Compare(exception.SourceObject != null, "SourceObject == null");
                 return;
             }
-            CError.Compare(exception.SourceObject.GetType().ToString(), "MS.Internal.Xml.Cache.XPathDocumentNavigator", "SourceObject.GetType");
+            if (!PlatformDetection.IsNetNative) // Cannot get names of internal framework types
+            {
+                CError.Compare(exception.SourceObject.GetType().ToString(), "MS.Internal.Xml.Cache.XPathDocumentNavigator", "SourceObject.GetType");
+            }
             _output.WriteLine("Exc: " + exception);
         }
 

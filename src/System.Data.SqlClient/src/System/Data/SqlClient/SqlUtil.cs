@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-
-
-//------------------------------------------------------------------------------
-
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
@@ -14,12 +10,14 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Reflection;
+using System.Transactions;
 
 namespace System.Data.SqlClient
 {
     internal static class AsyncHelper
     {
-        internal static Task CreateContinuationTask(Task task, Action onSuccess, SqlInternalConnectionTds connectionToDoom = null, Action<Exception> onFailure = null)
+        internal static Task CreateContinuationTask(Task task, Action onSuccess, Action<Exception> onFailure = null)
         {
             if (task == null)
             {
@@ -29,29 +27,61 @@ namespace System.Data.SqlClient
             else
             {
                 TaskCompletionSource<object> completion = new TaskCompletionSource<object>();
-                ContinueTask(task, completion,
-                    () => { onSuccess(); completion.SetResult(null); },
-                    connectionToDoom, onFailure);
+                ContinueTaskWithState(task, completion,
+                    state: Tuple.Create(onSuccess, onFailure,completion),
+                    onSuccess: (state) => {
+                        var parameters = (Tuple<Action, Action<Exception>, TaskCompletionSource<object>>)state;
+                        Action success = parameters.Item1;
+                        TaskCompletionSource<object> taskCompletionSource = parameters.Item3;
+                        success();
+                        taskCompletionSource.SetResult(null);
+                    },
+                    onFailure: (exception,state) =>
+                    {
+                        var parameters = (Tuple<Action, Action<Exception>, TaskCompletionSource<object>>)state;
+                        Action<Exception> failure = parameters.Item2;
+                        failure?.Invoke(exception);
+                    }
+                );
                 return completion.Task;
             }
         }
 
-        internal static Task CreateContinuationTask<T1, T2>(Task task, Action<T1, T2> onSuccess, T1 arg1, T2 arg2, SqlInternalConnectionTds connectionToDoom = null, Action<Exception> onFailure = null)
+        internal static Task CreateContinuationTaskWithState(Task task, object state, Action<object> onSuccess, Action<Exception,object> onFailure = null)
         {
-            return CreateContinuationTask(task, () => onSuccess(arg1, arg2), connectionToDoom, onFailure);
+            if (task == null)
+            {
+                onSuccess(state);
+                return null;
+            }
+            else
+            {
+                var completion = new TaskCompletionSource<object>();
+                ContinueTaskWithState(task, completion, state,
+                    onSuccess: (continueState) => {
+                        onSuccess(continueState);
+                        completion.SetResult(null);
+                    },
+                    onFailure: onFailure
+                );
+                return completion.Task;
+            }
         }
+
+        internal static Task CreateContinuationTask<T1, T2>(Task task, Action<T1, T2> onSuccess, T1 arg1, T2 arg2, Action<Exception> onFailure = null)
+        {
+            return CreateContinuationTask(task, () => onSuccess(arg1, arg2), onFailure);
+        }
+
 
         internal static void ContinueTask(Task task,
                 TaskCompletionSource<object> completion,
                 Action onSuccess,
-                SqlInternalConnectionTds connectionToDoom = null,
                 Action<Exception> onFailure = null,
                 Action onCancellation = null,
-                Func<Exception, Exception> exceptionConverter = null,
-                SqlConnection connectionToAbort = null
+                Func<Exception, Exception> exceptionConverter = null
             )
         {
-            Debug.Assert((connectionToAbort == null) || (connectionToDoom == null), "Should not specify both connectionToDoom and connectionToAbort");
             task.ContinueWith(
                 tsk =>
                 {
@@ -64,10 +94,7 @@ namespace System.Data.SqlClient
                         }
                         try
                         {
-                            if (onFailure != null)
-                            {
-                                onFailure(exc);
-                            }
+                            onFailure?.Invoke(exc);
                         }
                         finally
                         {
@@ -78,10 +105,7 @@ namespace System.Data.SqlClient
                     {
                         try
                         {
-                            if (onCancellation != null)
-                            {
-                                onCancellation();
-                            }
+                            onCancellation?.Invoke();
                         }
                         finally
                         {
@@ -103,6 +127,61 @@ namespace System.Data.SqlClient
             );
         }
 
+        // the same logic as ContinueTask but with an added state parameter to allow the caller to avoid the use of a closure
+        // the parameter allocation cannot be avoided here and using closure names is clearer than Tuple numbered properties
+        internal static void ContinueTaskWithState(Task task,
+            TaskCompletionSource<object> completion,
+            object state,
+            Action<object> onSuccess,
+            Action<Exception, object> onFailure = null,
+            Action<object> onCancellation = null,
+            Func<Exception, Exception> exceptionConverter = null
+        )
+        {
+            task.ContinueWith(
+                tsk =>
+                {
+                    if (tsk.Exception != null)
+                    {
+                        Exception exc = tsk.Exception.InnerException;
+                        if (exceptionConverter != null)
+                        {
+                            exc = exceptionConverter(exc);
+                        }
+                        try
+                        {
+                            onFailure?.Invoke(exc, state);
+                        }
+                        finally
+                        {
+                            completion.TrySetException(exc);
+                        }
+                    }
+                    else if (tsk.IsCanceled)
+                    {
+                        try
+                        {
+                            onCancellation?.Invoke(state);
+                        }
+                        finally
+                        {
+                            completion.TrySetCanceled();
+                        }
+                    }
+                    else
+                    {
+                        try
+                        {
+                            onSuccess(state);
+                        }
+                        catch (Exception e)
+                        {
+                            completion.SetException(e);
+                        }
+                    }
+                }, TaskScheduler.Default
+            );
+        }
 
         internal static void WaitForCompletion(Task task, int timeout, Action onTimeout = null, bool rethrowExceptions = true)
         {
@@ -161,6 +240,10 @@ namespace System.Data.SqlClient
         //
         // SQL.Connection
         //
+        internal static Exception CannotGetDTCAddress()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_CannotGetDTCAddress));
+        }
 
         internal static Exception InvalidInternalPacketSize(string str)
         {
@@ -186,6 +269,10 @@ namespace System.Data.SqlClient
         {
             return ADP.Argument(SR.GetString(SR.SQL_UserInstanceFailoverNotCompatible));
         }
+        internal static Exception ParsingErrorLibraryType(ParsingErrorState state, int libraryType)
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_ParsingErrorAuthLibraryType, ((int)state).ToString(CultureInfo.InvariantCulture), libraryType));
+        }       
         internal static Exception InvalidSQLServerVersionUnknown()
         {
             return ADP.DataAdapter(SR.GetString(SR.SQL_InvalidSQLServerVersionUnknown));
@@ -202,6 +289,36 @@ namespace System.Data.SqlClient
         {
             return ADP.InvalidOperation(SR.GetString(SR.SQL_InstanceFailure));
         }
+        internal static Exception ChangePasswordArgumentMissing(string argumentName)
+        {
+            return ADP.ArgumentNull(SR.GetString(SR.SQL_ChangePasswordArgumentMissing, argumentName));
+        }
+        internal static Exception ChangePasswordConflictsWithSSPI()
+        {
+            return ADP.Argument(SR.GetString(SR.SQL_ChangePasswordConflictsWithSSPI));
+        }
+        internal static Exception ChangePasswordRequiresYukon()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_ChangePasswordRequiresYukon));
+        }
+        static internal Exception ChangePasswordUseOfUnallowedKey(string key)
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_ChangePasswordUseOfUnallowedKey, key));
+        }
+
+        //
+        // Global Transactions.
+        //
+        internal static Exception GlobalTransactionsNotEnabled()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.GT_Disabled));
+        }
+        internal static Exception UnknownSysTxIsolationLevel(Transactions.IsolationLevel isolationLevel)
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_UnknownSysTxIsolationLevel, isolationLevel.ToString()));
+        }
+
+
         internal static Exception InvalidPartnerConfiguration(string server, string database)
         {
             return ADP.InvalidOperation(SR.GetString(SR.SQL_InvalidPartnerConfiguration, server, database));
@@ -235,12 +352,12 @@ namespace System.Data.SqlClient
             {
                 case CommandType.Text:
                 case CommandType.StoredProcedure:
-                    Debug.Assert(false, "valid CommandType " + value.ToString());
+                    Debug.Fail("valid CommandType " + value.ToString());
                     break;
                 case CommandType.TableDirect:
                     break;
                 default:
-                    Debug.Assert(false, "invalid CommandType " + value.ToString());
+                    Debug.Fail("invalid CommandType " + value.ToString());
                     break;
             }
 #endif
@@ -257,12 +374,12 @@ namespace System.Data.SqlClient
                 case IsolationLevel.RepeatableRead:
                 case IsolationLevel.Serializable:
                 case IsolationLevel.Snapshot:
-                    Debug.Assert(false, "valid IsolationLevel " + value.ToString());
+                    Debug.Fail("valid IsolationLevel " + value.ToString());
                     break;
                 case IsolationLevel.Chaos:
                     break;
                 default:
-                    Debug.Assert(false, "invalid IsolationLevel " + value.ToString());
+                    Debug.Fail("invalid IsolationLevel " + value.ToString());
                     break;
             }
 #endif
@@ -280,6 +397,10 @@ namespace System.Data.SqlClient
             return ADP.InvalidOperation(SR.GetString(SR.SQL_PendingBeginXXXExists));
         }
 
+        internal static ArgumentOutOfRangeException InvalidSqlDependencyTimeout(string param)
+        {
+            return ADP.ArgumentOutOfRange(SR.GetString(SR.SqlDependency_InvalidTimeout), param);
+        }
 
         internal static Exception NonXmlResult()
         {
@@ -289,6 +410,10 @@ namespace System.Data.SqlClient
         //
         // SQL.DataParameter
         //
+        internal static Exception InvalidUdt3PartNameFormat()
+        {
+            return ADP.Argument(SR.GetString(SR.SQL_InvalidUdt3PartNameFormat));
+        }
         internal static Exception InvalidParameterTypeNameFormat()
         {
             return ADP.Argument(SR.GetString(SR.SQL_InvalidParameterTypeNameFormat));
@@ -335,6 +460,14 @@ namespace System.Data.SqlClient
         {
             return ADP.Argument(SR.GetString(SR.SQL_ParameterTypeNameRequired, paramType, paramName));
         }
+        internal static Exception NullSchemaTableDataTypeNotSupported(string columnName)
+        {
+            return ADP.Argument(SR.GetString(SR.NullSchemaTableDataTypeNotSupported, columnName));
+        }
+        internal static Exception InvalidSchemaTableOrdinals()
+        {
+            return ADP.Argument(SR.GetString(SR.InvalidSchemaTableOrdinals));
+        }
         internal static Exception EnumeratedRecordMetaDataChanged(string fieldName, int recordNumber)
         {
             return ADP.Argument(SR.GetString(SR.SQL_EnumeratedRecordMetaDataChanged, fieldName, recordNumber));
@@ -358,6 +491,18 @@ namespace System.Data.SqlClient
         internal static Exception ParsingError()
         {
             return ADP.InvalidOperation(SR.GetString(SR.SQL_ParsingError));
+        }
+        static internal Exception ParsingError(ParsingErrorState state)
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_ParsingErrorWithState, ((int)state).ToString(CultureInfo.InvariantCulture)));
+        }
+        static internal Exception ParsingErrorValue(ParsingErrorState state, int value)
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_ParsingErrorValue, ((int)state).ToString(CultureInfo.InvariantCulture), value));
+        }
+        static internal Exception ParsingErrorFeatureId(ParsingErrorState state, int featureId)
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_ParsingErrorFeatureId, ((int)state).ToString(CultureInfo.InvariantCulture), featureId));
         }
         internal static Exception MoneyOverflow(string moneyValue)
         {
@@ -409,7 +554,80 @@ namespace System.Data.SqlClient
             return ADP.InvalidCast(SR.GetString(SR.SQL_XmlReaderNotSupportOnColumnType, columnName));
         }
 
+        internal static Exception UDTUnexpectedResult(string exceptionText)
+        {
+            return ADP.TypeLoad(SR.GetString(SR.SQLUDT_Unexpected, exceptionText));
+        }
 
+        //
+        // SQL.SqlDependency
+        //
+        internal static Exception SqlCommandHasExistingSqlNotificationRequest()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQLNotify_AlreadyHasCommand));
+        }
+
+        internal static Exception SqlDepDefaultOptionsButNoStart()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlDependency_DefaultOptionsButNoStart));
+        }
+
+        internal static Exception SqlDependencyDatabaseBrokerDisabled()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlDependency_DatabaseBrokerDisabled));
+        }
+
+        internal static Exception SqlDependencyEventNoDuplicate()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlDependency_EventNoDuplicate));
+        }
+
+        internal static Exception SqlDependencyDuplicateStart()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlDependency_DuplicateStart));
+        }
+
+        internal static Exception SqlDependencyIdMismatch()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlDependency_IdMismatch));
+        }
+
+        internal static Exception SqlDependencyNoMatchingServerStart()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlDependency_NoMatchingServerStart));
+        }
+
+        internal static Exception SqlDependencyNoMatchingServerDatabaseStart()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlDependency_NoMatchingServerDatabaseStart));
+        }
+
+        //
+        // SQL.SqlDelegatedTransaction
+        //
+        internal static TransactionPromotionException PromotionFailed(Exception inner)
+        {
+            TransactionPromotionException e = new TransactionPromotionException(SR.GetString(SR.SqlDelegatedTransaction_PromotionFailed), inner);
+            ADP.TraceExceptionAsReturnValue(e);
+            return e;
+        }
+        //Failure while attempting to promote transaction.
+
+        //
+        // SQL.SqlMetaData
+        //
+        internal static Exception UnexpectedUdtTypeNameForNonUdtParams()
+        {
+            return ADP.Argument(SR.GetString(SR.SQLUDT_UnexpectedUdtTypeName));
+        }
+        internal static Exception MustSetUdtTypeNameForUdtParams()
+        {
+            return ADP.Argument(SR.GetString(SR.SQLUDT_InvalidUdtTypeName));
+        }
+        internal static Exception UDTInvalidSqlType(string typeName)
+        {
+            return ADP.Argument(SR.GetString(SR.SQLUDT_InvalidSqlType, typeName));
+        }
         internal static Exception InvalidSqlDbTypeForConstructor(SqlDbType type)
         {
             return ADP.Argument(SR.GetString(SR.SqlMetaData_InvalidSqlDbTypeForConstructorFormat, type.ToString()));
@@ -433,6 +651,14 @@ namespace System.Data.SqlClient
         internal static Exception UnsupportedColumnTypeForSqlProvider(string columnName, string typeName)
         {
             return ADP.Argument(SR.GetString(SR.SqlProvider_InvalidDataColumnType, columnName, typeName));
+        }
+        internal static Exception InvalidColumnMaxLength(string columnName, long maxLength)
+        {
+            return ADP.Argument(SR.GetString(SR.SqlProvider_InvalidDataColumnMaxLength, columnName, maxLength));
+        }
+        internal static Exception InvalidColumnPrecScale()
+        {
+            return ADP.Argument(SR.GetString(SR.SqlMisc_InvalidPrecScaleMessage));
         }
         internal static Exception NotEnoughColumnsInStructuredType()
         {
@@ -533,6 +759,10 @@ namespace System.Data.SqlClient
         {
             return ADP.InvalidOperation(SR.GetString(SR.SQL_BulkLoadPendingOperation));
         }
+        internal static Exception InvalidTableDerivedPrecisionForTvp(string columnName, byte precision)
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SqlParameter_InvalidTableDerivedPrecisionForTvp, precision, columnName, System.Data.SqlTypes.SqlDecimal.MaxPrecision));
+        }
 
         //
         // transactions.
@@ -545,6 +775,11 @@ namespace System.Data.SqlClient
         internal static Exception OpenResultCountExceeded()
         {
             return ADP.InvalidOperation(SR.GetString(SR.SQL_OpenResultCountExceeded));
+        }
+
+        internal static Exception UnsupportedSysTxForGlobalTransactions()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_UnsupportedSysTxVersion));
         }
 
         internal static readonly byte[] AttentionHeader = new byte[] {
@@ -773,6 +1008,11 @@ namespace System.Data.SqlClient
             return exc;
         }
 
+        internal static Exception BatchedUpdatesNotAvailableOnContextConnection()
+        {
+            return ADP.InvalidOperation(SR.GetString(SR.SQL_BatchedUpdatesNotAvailableOnContextConnection));
+        }
+
         /// <summary>
         /// gets a message for SNI error (sniError must be valid, non-zero error code)
         /// </summary>
@@ -780,9 +1020,15 @@ namespace System.Data.SqlClient
         {
             Debug.Assert(sniError > 0 && sniError <= (int)SNINativeMethodWrapper.SniSpecialErrors.MaxErrorValue, "SNI error is out of range");
 
-            string errorMessageId = String.Format((IFormatProvider)null, "SNI_ERROR_{0}", sniError);
+            string errorMessageId = string.Format("SNI_ERROR_{0}", sniError);
             return SR.GetResourceString(errorMessageId, errorMessageId);
         }
+
+        // Default values for SqlDependency and SqlNotificationRequest
+        internal const int SqlDependencyTimeoutDefault = 0;
+        internal const int SqlDependencyServerTimeout = 5 * 24 * 3600; // 5 days - used to compute default TTL of the dependency
+        internal const string SqlNotificationServiceDefault = "SqlQueryNotificationService";
+        internal const string SqlNotificationStoredProcedureDefault = "SqlQueryNotificationStoredProcedure";
     }
 
     sealed internal class SQLMessage
@@ -825,6 +1071,10 @@ namespace System.Data.SqlClient
         internal static string SSPIGenerateError()
         {
             return SR.GetString(SR.SQL_SSPIGenerateError);
+        }
+        internal static string SqlServerBrowserNotAccessible()
+        {
+            return SR.GetString(SR.SQL_SqlServerBrowserNotAccessible);
         }
         internal static string KerberosTicketMissingError()
         {
@@ -952,6 +1202,77 @@ namespace System.Data.SqlClient
         {
             Debug.Assert(input != null, "input string cannot be null");
             return input.Replace("'", "''");
+        }
+
+        /// <summary>
+        /// Escape a string as a TSQL literal, wrapping it around with single quotes.
+        /// Use this method to escape input strings to prevent SQL injection 
+        /// and to get correct behavior for embedded quotes.
+        /// </summary>
+        /// <param name="input">unescaped string</param>
+        /// <returns>escaped and quoted literal string</returns>
+        internal static string MakeStringLiteral(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return "''";
+            }
+            else
+            {
+                return "'" + EscapeStringAsLiteral(input) + "'";
+            }
+        }
+    }
+
+    /// <summary>
+    /// This class holds methods invoked on System.Transactions through reflection for Global Transactions
+    /// </summary>
+    static internal class SysTxForGlobalTransactions
+    {
+        private static readonly Lazy<MethodInfo> _enlistPromotableSinglePhase = new Lazy<MethodInfo>(() =>
+            typeof(Transaction).GetMethod("EnlistPromotableSinglePhase", new Type[] { typeof(IPromotableSinglePhaseNotification), typeof(Guid) }));
+
+        private static readonly Lazy<MethodInfo> _setDistributedTransactionIdentifier = new Lazy<MethodInfo>(() =>
+            typeof(Transaction).GetMethod("SetDistributedTransactionIdentifier", new Type[] { typeof(IPromotableSinglePhaseNotification), typeof(Guid) }));
+
+        private static readonly Lazy<MethodInfo> _getPromotedToken = new Lazy<MethodInfo>(() =>
+            typeof(Transaction).GetMethod("GetPromotedToken"));
+
+        /// <summary>
+        /// Enlists the given IPromotableSinglePhaseNotification and Non-MSDTC Promoter type into a transaction
+        /// </summary>
+        /// <returns>The MethodInfo instance to be invoked. Null if the method doesn't exist</returns>
+        public static MethodInfo EnlistPromotableSinglePhase
+        {
+            get
+            {
+                return _enlistPromotableSinglePhase.Value;
+            }
+        }
+
+        /// <summary>
+        /// Sets the given DistributedTransactionIdentifier for a Transaction instance.
+        /// Needs to be invoked when using a Non-MSDTC Promoter type
+        /// </summary>
+        /// <returns>The MethodInfo instance to be invoked. Null if the method doesn't exist</returns>
+        public static MethodInfo SetDistributedTransactionIdentifier
+        {
+            get
+            {
+                return _setDistributedTransactionIdentifier.Value;
+            }
+        }
+
+        /// <summary>
+        /// Gets the Promoted Token for a Transaction
+        /// </summary>
+        /// <returns>The MethodInfo instance to be invoked. Null if the method doesn't exist</returns>
+        public static MethodInfo GetPromotedToken
+        {
+            get
+            {
+                return _getPromotedToken.Value;
+            }
         }
     }
 }//namespace

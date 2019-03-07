@@ -1,3 +1,5 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// See the LICENSE file in the project root for more information
 //
 // KeyInfoX509DataTest.cs - Test Cases for KeyInfoX509Data
 //
@@ -127,7 +129,7 @@ namespace System.Security.Cryptography.Xml.Tests
         [Fact]
         public void Constructor_X509Certificate_X509IncludeOptionBad()
         {
-            KeyInfoX509Data data = new KeyInfoX509Data(new X509Certificate(cert), (X509IncludeOption)Int32.MinValue);
+            KeyInfoX509Data data = new KeyInfoX509Data(new X509Certificate(cert), (X509IncludeOption)int.MinValue);
             Assert.Null(data.Certificates);
             Assert.Null(data.CRL);
             Assert.Null(data.IssuerSerials);
@@ -144,17 +146,26 @@ namespace System.Security.Cryptography.Xml.Tests
         }
 
         [Fact]
-        public void AddIssuerSerial_Null_Serial()
-        {
-            KeyInfoX509Data data = new KeyInfoX509Data();
-            Assert.Throws<FormatException>(() => data.AddIssuerSerial(null, "serial"));
-        }
-
-        [Fact]
         public void AddIssuerSerial_Issuer_Null()
         {
             KeyInfoX509Data data = new KeyInfoX509Data();
-            Assert.Throws<ArgumentNullException>(() => data.AddIssuerSerial("issuer", null));
+            AssertExtensions.Throws<ArgumentException>("issuerName", () => data.AddIssuerSerial(null, "serial"));
+        }
+
+        [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "https://github.com/dotnet/corefx/issues/18690")]
+        public void AddIssuerSerial_Null_Serial()
+        {
+            KeyInfoX509Data data = new KeyInfoX509Data();
+            AssertExtensions.Throws<ArgumentException>("serialNumber", () => data.AddIssuerSerial("issuer", null));
+        }
+
+        [Fact]
+        [SkipOnTargetFramework(TargetFrameworkMonikers.NetFramework, "https://github.com/dotnet/corefx/issues/18690")]
+        public void AddIssuerSerial_Invalid_Serial()
+        {
+            KeyInfoX509Data data = new KeyInfoX509Data();
+            AssertExtensions.Throws<ArgumentException>("serialNumber", () => data.AddIssuerSerial("issuer", "NotANumber"));
         }
 
         [Fact]

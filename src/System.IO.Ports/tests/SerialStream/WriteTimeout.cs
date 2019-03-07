@@ -5,9 +5,10 @@
 using System.Diagnostics;
 using System.IO.PortsTests;
 using System.Threading;
+using System.Threading.Tasks;
 using Legacy.Support;
 using Xunit;
-using ThreadState = System.Threading.ThreadState;
+using Microsoft.DotNet.XUnitExtensions;
 
 namespace System.IO.Ports.Tests
 {
@@ -20,7 +21,7 @@ namespace System.IO.Ports.Tests
         // This needs to be large enough for Write timeout
         private const int DEFAULT_WRITE_BYTE_LARGE_ARRAY_SIZE = 1024 * 100;
 
-        // The BaudRate to use to make Write timeout when writing DEFAULT_WRITE_BYTE_LARGE_ARRAY_SIZE bytes 
+        // The BaudRate to use to make Write timeout when writing DEFAULT_WRITE_BYTE_LARGE_ARRAY_SIZE bytes
         private const int LARGEWRITE_BAUDRATE = 1200;
 
         // The timeout to use to make Write timeout when writing DEFAULT_WRITE_BYTE_LARGE_ARRAY_SIZE
@@ -49,8 +50,6 @@ namespace System.IO.Ports.Tests
         private const int NUM_TRYS = 5;
 
         private delegate void WriteMethodDelegate(Stream stream);
-
-        #region Test Cases
 
         [ConditionalFact(nameof(HasOneSerialPort))]
         public void WriteTimeout_DefaultValue()
@@ -93,6 +92,7 @@ namespace System.IO.Ports.Tests
             VerifyException(-2, typeof(ArgumentOutOfRangeException));
         }
 
+        [KnownFailure]
         [ConditionalFact(nameof(HasOneSerialPort))]
         public void WriteTimeout_ZERO()
         {
@@ -149,7 +149,7 @@ namespace System.IO.Ports.Tests
             VerifyLongTimeout(WriteByte, int.MaxValue - 1);
         }
 
-        [OuterLoop("Slow test")]
+        [Trait(XunitConstants.Category, XunitConstants.IgnoreForCI)]  // Timing-sensitive
         [ConditionalFact(nameof(HasOneSerialPort), nameof(HasHardwareFlowControl))]
         public void WriteTimeout_750_Write_byte_int_int()
         {
@@ -158,7 +158,7 @@ namespace System.IO.Ports.Tests
             VerifyTimeout(Write_byte_int_int, 750);
         }
 
-        [OuterLoop("Slow test")]
+        [Trait(XunitConstants.Category, XunitConstants.IgnoreForCI)]  // Timing-sensitive
         [ConditionalFact(nameof(HasOneSerialPort), nameof(HasSingleByteTransmitBlocking))]
         public void WriteTimeout_750_WriteByte()
         {
@@ -167,7 +167,7 @@ namespace System.IO.Ports.Tests
             VerifyTimeout(WriteByte, 750);
         }
 
-        [OuterLoop("Slow test")]
+        [Trait(XunitConstants.Category, XunitConstants.IgnoreForCI)]  // Timing-sensitive
         [ConditionalFact(nameof(HasOneSerialPort), nameof(HasHardwareFlowControl))]
         public void SuccessiveWriteTimeoutNoData_Write_byte_int_int()
         {
@@ -192,9 +192,7 @@ namespace System.IO.Ports.Tests
             using (var com1 = new SerialPort(TCSupport.LocalMachineSerialInfo.FirstAvailablePortName))
             {
                 var asyncEnableRts = new AsyncEnableRts();
-                var t = new Thread(asyncEnableRts.EnableRTS);
-
-                int waitTime;
+                var t = new Task(asyncEnableRts.EnableRTS);
 
                 com1.Open();
                 com1.Handshake = Handshake.RequestToSend;
@@ -205,18 +203,10 @@ namespace System.IO.Ports.Tests
                     "Verifying WriteTimeout={0} with successive call to Write(byte[], int, int) and some data being received in the first call",
                     stream.WriteTimeout);
 
-                // Call EnableRTS asynchronously this will enable RTS in the middle of the following write call allowing it to succeed 
+                // Call EnableRTS asynchronously this will enable RTS in the middle of the following write call allowing it to succeed
                 // before the timeout is reached
                 t.Start();
-                waitTime = 0;
-
-                while (t.ThreadState == ThreadState.Unstarted && waitTime < 2000)
-                {
-                    // Wait for the thread to start
-                    Thread.Sleep(50);
-                    waitTime += 50;
-                }
-
+                TCSupport.WaitForTaskToStart(t);
                 try
                 {
                     stream.Write(new byte[s_DEFAULT_WRITE_BYTE_ARRAY_SIZE], 0, s_DEFAULT_WRITE_BYTE_ARRAY_SIZE);
@@ -227,9 +217,7 @@ namespace System.IO.Ports.Tests
 
                 asyncEnableRts.Stop();
 
-                // Wait for the thread to finish
-                while (t.IsAlive)
-                    Thread.Sleep(50);
+                TCSupport.WaitForTaskCompletion(t);
 
                 // Make sure there is no bytes in the buffer so the next call to write will timeout
                 com1.DiscardInBuffer();
@@ -238,7 +226,7 @@ namespace System.IO.Ports.Tests
             }
         }
 
-        [OuterLoop("Slow test")]
+        [Trait(XunitConstants.Category, XunitConstants.IgnoreForCI)]  // Timing-sensitive
         [ConditionalFact(nameof(HasOneSerialPort), nameof(HasSingleByteTransmitBlocking))]
         public void SuccessiveWriteTimeoutNoData_WriteByte()
         {
@@ -264,9 +252,7 @@ namespace System.IO.Ports.Tests
             using (var com1 = new SerialPort(TCSupport.LocalMachineSerialInfo.FirstAvailablePortName))
             {
                 var asyncEnableRts = new AsyncEnableRts();
-                var t = new Thread(asyncEnableRts.EnableRTS);
-
-                int waitTime;
+                var t = new Task(asyncEnableRts.EnableRTS);
 
                 com1.Open();
                 com1.Handshake = Handshake.RequestToSend;
@@ -277,18 +263,10 @@ namespace System.IO.Ports.Tests
                     "Verifying WriteTimeout={0} with successive call to WriteByte() and some data being received in the first call",
                     stream.WriteTimeout);
 
-                // Call EnableRTS asynchronously this will enable RTS in the middle of the following write call allowing it to succeed 
+                // Call EnableRTS asynchronously this will enable RTS in the middle of the following write call allowing it to succeed
                 // before the timeout is reached
                 t.Start();
-                waitTime = 0;
-
-                while (t.ThreadState == ThreadState.Unstarted && waitTime < 2000)
-                {
-                    // Wait for the thread to start
-                    Thread.Sleep(50);
-                    waitTime += 50;
-                }
-
+                TCSupport.WaitForTaskToStart(t);
                 try
                 {
                     stream.WriteByte(DEFAULT_WRITE_BYTE);
@@ -299,9 +277,7 @@ namespace System.IO.Ports.Tests
 
                 asyncEnableRts.Stop();
 
-                // Wait for the thread to finish
-                while (t.IsAlive)
-                    Thread.Sleep(50);
+                TCSupport.WaitForTaskCompletion(t);
 
                 // Make sure there is no bytes in the buffer so the next call to write will timeout
                 com1.DiscardInBuffer();
@@ -376,9 +352,6 @@ namespace System.IO.Ports.Tests
                 }
             }
         }
-        #endregion
-
-        #region Verification for Test Cases
 
         private void VerifyDefaultTimeout(WriteMethodDelegate writeMethod)
         {
@@ -404,10 +377,8 @@ namespace System.IO.Ports.Tests
                 com1.Open();
                 com1.Handshake = Handshake.RequestToSend;
                 com1.BaseStream.ReadTimeout = 1;
-                com1.BaseStream.WriteTimeout = 1;
 
                 com1.BaseStream.WriteTimeout = writeTimeout;
-
                 Assert.Equal(writeTimeout, com1.BaseStream.WriteTimeout);
 
                 VerifyLongTimeout(writeMethod, com1);
@@ -416,16 +387,14 @@ namespace System.IO.Ports.Tests
 
         private void VerifyLongTimeout(WriteMethodDelegate writeMethod, SerialPort com1)
         {
-            var writeThread = new WriteDelegateThread(com1.BaseStream, writeMethod);
-            var t = new Thread(writeThread.CallWrite);
+            var t = new Task(() => { writeMethod(com1.BaseStream); });
 
             t.Start();
             Thread.Sleep(DEFAULT_WAIT_LONG_TIMEOUT);
-            Assert.True(t.IsAlive,
+            Assert.False(t.IsCompleted,
                 string.Format("Err_17071ahpa!!! {0} terminated with a long timeout of {1}ms", writeMethod.Method.Name, com1.BaseStream.WriteTimeout));
             com1.Handshake = Handshake.None;
-            while (t.IsAlive)
-                Thread.Sleep(10);
+            TCSupport.WaitForTaskCompletion(t);
         }
 
         private void VerifyTimeout(WriteMethodDelegate writeMethod, int WriteTimeout)
@@ -610,24 +579,5 @@ namespace System.IO.Ports.Tests
         {
             stream.WriteByte(DEFAULT_WRITE_BYTE);
         }
-
-        private class WriteDelegateThread
-        {
-            public WriteDelegateThread(Stream stream, WriteMethodDelegate writeMethod)
-            {
-                _stream = stream;
-                _writeMethod = writeMethod;
-            }
-
-            public void CallWrite()
-            {
-                _writeMethod(_stream);
-            }
-
-            private readonly WriteMethodDelegate _writeMethod;
-            private readonly Stream _stream;
-        }
-
-        #endregion
     }
 }

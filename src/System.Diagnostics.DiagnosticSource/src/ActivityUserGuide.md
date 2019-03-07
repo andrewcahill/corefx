@@ -60,9 +60,9 @@ When that activity is started, it gets an [Id](id) and [Parent](parent).
            //add tags, baggage, etc.
            activity.SetParentId(context.Request.headers["Request-id"])
            foreach (var pair in context.Request.Headers["Correlation-Context"])
-		   {
-			   var baggageItem = NameValueHEaderValue.Parse(pair);
-	           activity.AddBaggage(baggageItem.Key, baggageItem.Value);
+           {
+               var baggageItem = NameValueHeaderValue.Parse(pair);
+               activity.AddBaggage(baggageItem.Key, baggageItem.Value);
            }     
            httpListener.StartActivity(activity, new  {context});
            try {
@@ -114,7 +114,7 @@ An application may also add tags and baggage to the current activity when proces
 Note that in the [Incoming Request Sample](#starting-and-stopping-activity), we pass `HttpContext` to DiagnosticSource, so that the application has access to the request properties in order to enrich the current activity.
 
 ### Subscribe to DiagnosticSource
-```
+```C#
     DiagnosticListener.AllListeners.Subscribe(delegate (DiagnosticListener listener)
     {
         if (listener.Name == "MyActivitySource")
@@ -132,55 +132,55 @@ Note that in the [Incoming Request Sample](#starting-and-stopping-activity), we 
 
 ### Log Events
 
-```
-	public void LogActivityStart()
-	{
-		var document = new Dictionary<string,object>
-		{
-			["Message"] = $"Activity {activity.OperationName} was started",
-			["LogLevel"] = LogLevel.Info,
-			["Id"] = activity.Id,
-			["ParentId"] = activity.ParentId,
-			["StartTime"] = activity.StartTimeUtc,
-		}
-		//log tags and baggage if needed
-		...// send document to log storage	   
-	}
+```C#
+    public void LogActivityStart()
+    {
+        var document = new Dictionary<string,object>
+        {
+            ["Message"] = $"Activity {activity.OperationName} was started",
+            ["LogLevel"] = LogLevel.Info,
+            ["Id"] = activity.Id,
+            ["ParentId"] = activity.ParentId,
+            ["StartTime"] = activity.StartTimeUtc,
+        }
+        //log tags and baggage if needed
+        ...// send document to log storage       
+    }
 
-	public void LogActivityStop()
-	{
-		var document = new Dictionary<string,object>
-		{
-			["Message"] = $"Activity {activity.OperationName} is being stopped",
-			["LogLevel"] = LogLevel.Info,
-			["Id"] = activity.Id,
-			["ParentId"] = activity.ParentId,
-			["Duration"] = activity.Duration
-		};
-		
-		//warning: Baggage or Tag could have duplicated keys!
+    public void LogActivityStop()
+    {
+        var document = new Dictionary<string,object>
+        {
+            ["Message"] = $"Activity {activity.OperationName} is being stopped",
+            ["LogLevel"] = LogLevel.Info,
+            ["Id"] = activity.Id,
+            ["ParentId"] = activity.ParentId,
+            ["Duration"] = activity.Duration
+        };
+        
+        //warning: Baggage or Tag could have duplicated keys!
         foreach (var kv in activity.Tags)
             document[kv.Key] = kv.Value;
         foreach (var kv in activity.Baggage)
             document[kv.Key] = kv.Value;
-		...// send document to log storage
-	}
+        ...// send document to log storage
+    }
 
-	public void Log(LogLevel level, string message)
-	{
-		var document = new Dictionary<string,object>
-		{
-			["Message"] = message,
-			["LogLevel"] = logLevel,
-		};
+    public void Log(LogLevel level, string message)
+    {
+        var document = new Dictionary<string,object>
+        {
+            ["Message"] = message,
+            ["LogLevel"] = logLevel,
+        };
 
-	    if (Activity.Current != null)
-	    {
-			document["Id"] = activity.Id;
-			//add tags, baggage and ParentId if needed
-		}
-		...// send document to log storage
-	}
+        if (Activity.Current != null)
+        {
+            document["Id"] = activity.Id;
+            //add tags, baggage and ParentId if needed
+        }
+        ...// send document to log storage
+    }
 ```
 
 It's crucial that Activity Id is logged along with every event. ParentId, Tags and Baggage must be logged at least once for every activity and may be logged with every telemetry event to simplify querying and aggregation. Duration is only available after SetEndTime is called and should be logged when Activity Stop event is received.
@@ -194,7 +194,7 @@ Applications start Activity to represent logical piece of work to be done; one A
 The whole operation may be represented as a tree of Activities. All operations done by the distributed system may be represented as a forest of Activities trees.
 Id uniquely identifies Activity in the forest. It has an hierarchical structure to efficiently describe the operation as Activity tree.
 
-Activity.Id serves as hierarchical Request-Id in terms of [HTTP standard proposal for correlation](https://github.com/lmolkova/correlation/blob/master/http_protocol_proposal_v1.md) 
+Activity.Id serves as hierarchical Request-Id in terms of [HTTP Correlation Protocol](HttpCorrelationProtocol.md) 
 
 ### Id Format
 
@@ -202,22 +202,22 @@ Activity.Id serves as hierarchical Request-Id in terms of [HTTP standard proposa
 
 e.g. 
 
-`|Server1-5d183ab6-a000b421.1.8e2d4c28_1.`
+`|a000b421-5d183ab6.1.8e2d4c28_1.`
 
 It starts with '|' followed by [root-id](#root-id) followed by '.' and small identifiers of local Activities, separated by '.' or '_'. 
 
-[Root-id](#root-id) identifies the whole operation and 'Id' identifies particular Actvity involved in operation processing.
+[Root-id](#root-id) identifies the whole operation and 'Id' identifies particular Activity involved in operation processing.
 
-'|' indicates Id has hierarchcal structure, which is useful information for logging system. 
+'|' indicates Id has hierarchical structure, which is useful information for logging system. 
 
 * Id is 1024 bytes or shorter
 * Id consist of [Base64](https://en.wikipedia.org/wiki/Base64), '-' (hyphen), '.' (dot), '_' (underscore) and '#' (pound) characters. 
 Where base64 and '-' are used in nodes and other characters delimit nodes. Id always ends with one of the delimiters.
 
 ### Root Id
-When you start the first Activity for the operation, you may optionaly provide root-id through `Activity.SetParentId(string)` API. 
+When you start the first Activity for the operation, you may optionally provide root-id through `Activity.SetParentId(string)` API. 
 
-If you don't provide it, Activity will generate root-id: e.g. `Server-5d183ab6-a000b421`
+If you don't provide it, Activity will generate root-id: e.g. `a000b421-5d183ab6`
 
 If don't have ParentId from external process and want to generate one, keep in mind that Root-Id
 * MUST be sufficiently large to identify single operation in entire system: use 64(or 128) bit random number or Guid
@@ -276,7 +276,7 @@ Id is passed to external dependencies and considered as [ParentId](#parentid) fo
 `string ParentId { get; private set; }` - Activity may have either an in-process [Parent](#parent) or an external Parent if it was deserialized from request. ParentId together with Id represent the parent-child relationship in logs and allows you to correlate outgoing and incoming requests.
 
 ### RootId
-`string RootId  { get; private set; }` - Returns [root id](#root-id): Id (or ParentId) substring from '|' to first '.' occurence.
+`string RootId  { get; private set; }` - Returns [root id](#root-id): Id (or ParentId) substring from '|' to first '.' occurrence.
 
 ### Current
 `static Activity Current { get; }` - Returns current Activity which flows across async calls.
@@ -308,7 +308,7 @@ Id is passed to external dependencies and considered as [ParentId](#parentid) fo
 ### SetEndTime()
 `Activity SetEndTime(DateTime endTimeUtc)` - sets [Duration](#duration) as a difference between endTimeUtc and [StartTimeUtc](#starttimeutc).
 
-##DiagnosticSource
+## DiagnosticSource
 ### StartActivity
 `Activity StartActivity(Activity activity, object args)` - Starts the given activity and writes DiagnosticSource event message OperationName.Start with args payload.
 ### StopActivity

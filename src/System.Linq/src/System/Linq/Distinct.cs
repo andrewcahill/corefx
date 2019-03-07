@@ -9,16 +9,13 @@ namespace System.Linq
 {
     public static partial class Enumerable
     {
-        public static IEnumerable<TSource> Distinct<TSource>(this IEnumerable<TSource> source)
-        {
-            return Distinct(source, null);
-        }
+        public static IEnumerable<TSource> Distinct<TSource>(this IEnumerable<TSource> source) => Distinct(source, null);
 
         public static IEnumerable<TSource> Distinct<TSource>(this IEnumerable<TSource> source, IEqualityComparer<TSource> comparer)
         {
             if (source == null)
             {
-                throw Error.ArgumentNull(nameof(source));
+                ThrowHelper.ThrowArgumentNullException(ExceptionArgument.source);
             }
 
             return new DistinctIterator<TSource>(source, comparer);
@@ -28,7 +25,7 @@ namespace System.Linq
         /// An iterator that yields the distinct values in an <see cref="IEnumerable{TSource}"/>.
         /// </summary>
         /// <typeparam name="TSource">The type of the source enumerable.</typeparam>
-        private sealed class DistinctIterator<TSource> : Iterator<TSource>, IIListProvider<TSource>
+        private sealed partial class DistinctIterator<TSource> : Iterator<TSource>
         {
             private readonly IEnumerable<TSource> _source;
             private readonly IEqualityComparer<TSource> _comparer;
@@ -42,10 +39,7 @@ namespace System.Linq
                 _comparer = comparer;
             }
 
-            public override Iterator<TSource> Clone()
-            {
-                return new DistinctIterator<TSource>(_source, _comparer);
-            }
+            public override Iterator<TSource> Clone() => new DistinctIterator<TSource>(_source, _comparer);
 
             public override bool MoveNext()
             {
@@ -93,28 +87,6 @@ namespace System.Linq
                 }
 
                 base.Dispose();
-            }
-
-            private Set<TSource> FillSet()
-            {
-                Set<TSource> set = new Set<TSource>(_comparer);
-                set.UnionWith(_source);
-                return set;
-            }
-
-            public TSource[] ToArray()
-            {
-                return FillSet().ToArray();
-            }
-
-            public List<TSource> ToList()
-            {
-                return FillSet().ToList();
-            }
-
-            public int GetCount(bool onlyIfCheap)
-            {
-                return onlyIfCheap ? -1 : FillSet().Count;
             }
         }
     }

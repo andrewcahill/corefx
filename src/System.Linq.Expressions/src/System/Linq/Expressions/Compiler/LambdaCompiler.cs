@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Dynamic.Utils;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
@@ -155,11 +156,6 @@ namespace System.Linq.Expressions.Compiler
             _boundConstants.EmitCacheConstants(this);
         }
 
-        public override string ToString()
-        {
-            return _method.ToString();
-        }
-
         internal ILGenerator IL => _ilg;
 
         internal IParameterProvider Parameters => _lambda;
@@ -177,6 +173,8 @@ namespace System.Linq.Expressions.Compiler
         /// <returns>The compiled delegate.</returns>
         internal static Delegate Compile(LambdaExpression lambda)
         {
+            lambda.ValidateArgumentCount();
+
             // 1. Bind lambda
             AnalyzedTree tree = AnalyzeLambda(ref lambda);
 
@@ -228,14 +226,6 @@ namespace System.Linq.Expressions.Compiler
         {
             Debug.Assert(local != null);
             _freeLocals.Push(local.LocalType, local);
-        }
-
-        internal LocalBuilder GetNamedLocal(Type type, ParameterExpression variable)
-        {
-            Debug.Assert(type != null && variable != null);
-
-            LocalBuilder lb = _ilg.DeclareLocal(type);
-            return lb;
         }
 
         /// <summary>

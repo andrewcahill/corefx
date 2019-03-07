@@ -5,13 +5,9 @@
 using System;
 using System.Diagnostics;
 using System.Collections.Generic;
-using System.Security.Permissions;
 
 namespace System.DirectoryServices.AccountManagement
 {
-#pragma warning disable 618    // Have not migrated to v4 transparency yet
-    [System.Security.SecurityCritical(System.Security.SecurityCriticalScope.Everything)]
-#pragma warning restore 618
     [DirectoryRdnPrefix("CN")]
     public class ComputerPrincipal : AuthenticablePrincipal
     {
@@ -20,11 +16,8 @@ namespace System.DirectoryServices.AccountManagement
         //
         public ComputerPrincipal(PrincipalContext context) : base(context)
         {
-            if (context == null)
-                throw new ArgumentException(StringResources.NullArguments);
-
             if (Context.ContextType == ContextType.ApplicationDirectory && this.GetType() == typeof(ComputerPrincipal))
-                throw new InvalidOperationException(StringResources.ComputerInvalidForAppDirectoryStore);
+                throw new InvalidOperationException(SR.ComputerInvalidForAppDirectoryStore);
 
             this.ContextRaw = context;
             this.unpersisted = true;
@@ -33,10 +26,10 @@ namespace System.DirectoryServices.AccountManagement
         public ComputerPrincipal(PrincipalContext context, string samAccountName, string password, bool enabled) : this(context)
         {
             if (samAccountName == null || password == null)
-                throw new ArgumentException(StringResources.NullArguments);
+                throw new ArgumentException(SR.NullArguments);
 
             if (Context.ContextType == ContextType.ApplicationDirectory && this.GetType() == typeof(ComputerPrincipal))
-                throw new InvalidOperationException(StringResources.ComputerInvalidForAppDirectoryStore);
+                throw new InvalidOperationException(SR.ComputerInvalidForAppDirectoryStore);
 
             if (Context.ContextType != ContextType.ApplicationDirectory)
                 this.SamAccountName = samAccountName;
